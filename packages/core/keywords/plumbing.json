@@ -1,0 +1,39 @@
+{
+  "core": [
+    "plumbing company",
+    "plumber",
+    "plumbing contractor",
+    "plumbing services",
+    "licensed plumber",
+    "emergency plumber"
+  ],
+  "transactional": [
+    "plumber near me",
+    "plumbing repair",
+    "drain cleaning",
+    "water heater repair",
+    "pipe repair",
+    "plumbing installation",
+    "plumber cost",
+    "plumbing estimate"
+  ],
+  "emergency": [
+    "emergency plumber",
+    "24 hour plumber",
+    "urgent plumbing repair",
+    "plumbing emergency",
+    "burst pipe repair",
+    "water leak emergency"
+  ],
+  "adjacency": [
+    "clogged drain",
+    "sewer line repair",
+    "bathroom plumbing",
+    "kitchen plumbing",
+    "water heater replacement",
+    "pipe leak",
+    "toilet repair",
+    "sink installation"
+  ]
+}
+

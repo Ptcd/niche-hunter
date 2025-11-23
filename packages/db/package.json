@@ -1,0 +1,26 @@
+{
+  "name": "@niche-hunter/db",
+  "version": "1.0.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:studio": "prisma studio",
+    "db:seed": "tsx src/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.7.1",
+    "@supabase/auth-helpers-nextjs": "^0.10.0",
+    "@supabase/supabase-js": "^2.84.0",
+    "csv-parse": "^5.5.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "prisma": "^5.7.1",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  }
+}

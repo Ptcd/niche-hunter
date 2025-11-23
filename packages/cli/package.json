@@ -1,0 +1,27 @@
+{
+  "name": "@niche-hunter/cli",
+  "version": "1.0.0",
+  "bin": {
+    "niche-hunter": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@niche-hunter/core": "*",
+    "@niche-hunter/crawler": "*",
+    "@niche-hunter/db": "*",
+    "@niche-hunter/ai": "*",
+    "dotenv": "^16.3.1",
+    "pino": "^8.17.0",
+    "yargs": "^17.7.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/yargs": "^17.0.24",
+    "typescript": "^5.3.3"
+  }
+}

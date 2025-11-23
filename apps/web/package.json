@@ -1,0 +1,36 @@
+{
+  "name": "@niche-hunter/web",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "deploy": "vercel --prod"
+  },
+  "dependencies": {
+    "@niche-hunter/core": "*",
+    "@niche-hunter/crawler": "*",
+    "@niche-hunter/db": "*",
+    "csv-parse": "^5.5.3",
+    "dotenv": "^16.6.1",
+    "exceljs": "^4.4.0",
+    "formidable": "^3.5.1",
+    "googleapis": "^128.0.0",
+    "google-auth-library": "^9.4.1",
+    "openai": "^4.20.0",
+    "twilio": "^4.19.0",
+    "next": "^14.0.4",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@types/formidable": "^3.4.5",
+    "@types/node": "^20.10.0",
+    "@types/react": "^18.2.45",
+    "@types/react-dom": "^18.2.18",
+    "typescript": "^5.3.3"
+  }
+}

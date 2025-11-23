@@ -1,0 +1,21 @@
+{
+  "intentWeights": {
+    "core": 1.0,
+    "transactional": 1.1,
+    "emergency": 0.7,
+    "adjacency": 0.6
+  },
+  "difficultyWeights": {
+    "localPack": 0.25,
+    "aggregatorCount": 0.25,
+    "directoryCount": 0.10,
+    "emdCount": -0.10,
+    "titleContainsCity": -0.10,
+    "thinPageRatio": 0.20
+  },
+  "difficultyThresholds": {
+    "superEasy": 0.3,
+    "kindOfEasy": 0.6
+  }
+}
+

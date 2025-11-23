@@ -1,0 +1,43 @@
+{
+  "core": [
+    "hvac company",
+    "hvac contractor",
+    "hvac services",
+    "heating and cooling",
+    "hvac technician",
+    "licensed hvac contractor"
+  ],
+  "transactional": [
+    "hvac near me",
+    "hvac repair",
+    "ac repair",
+    "furnace repair",
+    "hvac installation",
+    "hvac maintenance",
+    "hvac cost",
+    "hvac estimate"
+  ],
+  "emergency": [
+    "emergency hvac",
+    "24 hour hvac",
+    "urgent hvac repair",
+    "hvac emergency",
+    "no heat emergency",
+    "ac not working emergency"
+  ],
+  "adjacency": [
+    "air conditioning repair",
+    "furnace replacement",
+    "ductwork repair",
+    "thermostat installation",
+    "hvac tune up",
+    "air duct cleaning",
+    "heat pump repair",
+    "boiler repair"
+  ]
+}
+
+
+
+
+

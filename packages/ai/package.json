@@ -1,0 +1,19 @@
+{
+  "name": "@niche-hunter/ai",
+  "version": "1.0.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "openai": "^4.20.0",
+    "@anthropic-ai/sdk": "^0.9.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.3"
+  }
+}
+

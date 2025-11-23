@@ -1,0 +1,30 @@
+{
+  "core": [
+    "roofing company",
+    "roofing contractor",
+    "roofers",
+    "roofing services"
+  ],
+  "transactional": [
+    "roof repair",
+    "roof replacement",
+    "shingle repair",
+    "roof installation",
+    "roofing quote",
+    "roof estimate"
+  ],
+  "emergency": [
+    "emergency roof repair",
+    "roof leak emergency",
+    "urgent roof repair",
+    "24 hour roof repair"
+  ],
+  "adjacency": [
+    "hail roof damage",
+    "roof inspection",
+    "roof maintenance",
+    "gutter repair",
+    "siding repair"
+  ]
+}
+

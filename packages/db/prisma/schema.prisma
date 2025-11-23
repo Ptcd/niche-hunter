@@ -1,0 +1,588 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enums
+enum SiteStatus {
+  SETUP          // Need domain/phone/WP
+  GENERATING    // AI building pages
+  REVIEW         // Pages ready for approval
+  LIVE           // Published & healthy
+  PAUSED         // Temporarily disabled
+  ERROR          // Needs attention
+}
+
+enum PageStatus {
+  DRAFT
+  APPROVED
+  PUBLISHED
+  NEEDS_REWRITE
+  ARCHIVED
+}
+
+enum PhoneSource {
+  MANUAL
+  TWILIO
+  RINGBA
+  VOIPMS
+}
+
+enum LeadType {
+  CALL
+  FORM
+}
+
+enum PageType {
+  HOME
+  CORE_SERVICE
+  SUPPORT
+  CITY
+  ABOUT
+  CONTACT
+  LEGAL
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  MANAGER
+  VA
+  VIEWER
+}
+
+model Run {
+  id        String   @id @default(cuid())
+  niche     String
+  payout    Float
+  createdAt DateTime @default(now())
+  status    String
+  notes     String?
+  scans     Scan[]
+
+  @@index([niche, createdAt])
+}
+
+model Scan {
+  id               String   @id @default(cuid())
+  runId            String
+  city             String
+  state            String
+  zip              String?
+  keyword          String
+  serpJson         Json?
+  signalsJson      Json?
+  demandScore      Float    @default(0)
+  difficulty       Float    @default(0)
+  opportunity      Float    @default(0)
+  profitEst        Float?
+  classification   String?
+  keywords         String?
+  createdAt        DateTime @default(now())
+  domainRating     Float?
+  backlinks        Int?
+  referringDomains Int?
+  run              Run      @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId, city, state])
+  @@index([opportunity])
+}
+
+model VolumeSample {
+  id         String   @id @default(cuid())
+  keyword    String
+  city       String
+  state      String
+  volume     Int
+  source     String
+  capturedAt DateTime @default(now())
+
+  @@unique([keyword, city, state])
+  @@index([keyword, city, state, capturedAt])
+}
+
+model Payout {
+  id        String   @id @default(cuid())
+  city      String
+  state     String
+  zip       String?
+  payout    Float
+  createdAt DateTime @default(now())
+
+  @@unique([city, state, zip])
+  @@index([city, state])
+}
+
+// Multi-Tenant Auth Models
+model User {
+  id          String        @id @default(cuid())
+  sbUserId    String        @unique
+  email       String        @unique
+  name        String?
+  avatarUrl   String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  memberships Membership[]
+  ownedAccounts Account[]   @relation("AccountOwner")
+}
+
+model Account {
+  id          String        @id @default(cuid())
+  name        String
+  ownerId     String
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  owner       User           @relation("AccountOwner", fields: [ownerId], references: [id])
+  memberships Membership[]
+  sites       Site[]
+  niches      Niche[]
+  batches     ScanBatch[]
+}
+
+model Membership {
+  id         String     @id @default(cuid())
+  userId     String
+  accountId  String
+  role       Role
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  user       User       @relation(fields: [userId], references: [id])
+  account    Account    @relation(fields: [accountId], references: [id])
+  @@unique([userId, accountId])
+}
+
+// V5000 Models
+model Niche {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  accountId   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+  account     Account? @relation(fields: [accountId], references: [id])
+  keywords    NicheKeyword[]
+  batches     ScanBatch[]
+  sites       Site[]
+  writerConfig ContentWriterConfig?
+
+  @@index([slug])
+  @@index([accountId])
+}
+
+model NicheKeyword {
+  id                String   @id @default(cuid())
+  nicheId           String
+  keyword           String
+  nationalVolume    Int?
+  nationalKd        Int?
+  intent            String   @default("transactional")
+  keywordType       String?  // money, supporting, informational, brand, local, other
+  scope             String?  @default("local") // local, national, both
+  isActive          Boolean  @default(true)
+  notes             String?
+  sortOrder         Int      @default(0)
+  createdAt         DateTime @default(now())
+  niche             Niche    @relation(fields: [nicheId], references: [id], onDelete: Cascade)
+  keywords          KeywordV5000[]
+
+  @@unique([nicheId, keyword])
+  @@index([nicheId])
+}
+
+model CityV5000 {
+  id                    String   @id @default(cuid())
+  city                  String
+  state                 String
+  countryCode           String   @default("US")
+  latitude              Float?   // Geographic coordinates for proximity calculations
+  longitude             Float?   // Geographic coordinates for proximity calculations
+  dataforseoLocationCode Int?
+  population            Int?
+  payout                Float?   // Lead value from CSV (required per niche+location)
+  isSkipped             Boolean  @default(false)
+  createdAt             DateTime @default(now())
+  keywords              KeywordV5000[]
+
+  @@unique([city, state, countryCode])
+  @@index([city, state])
+  @@index([latitude, longitude])  // For proximity queries
+}
+
+model ScanBatch {
+  id                String   @id @default(cuid())
+  nicheId           String
+  accountId         String?
+  name              String?
+  status            String   @default("queued")
+  totalKeywords     Int?
+  skippedCities     Int      @default(0)
+  processedKeywords Int      @default(0)
+  processingLog     Json?    // Real-time progress log
+  cancelledAt       DateTime? // When batch was cancelled
+  createdAt         DateTime @default(now())
+  completedAt       DateTime?
+  niche             Niche    @relation(fields: [nicheId], references: [id])
+  account           Account? @relation(fields: [accountId], references: [id])
+  keywords          KeywordV5000[]
+  sites             Site[]
+
+  @@index([nicheId, status])
+  @@index([status])
+  @@index([accountId])
+}
+
+model KeywordV5000 {
+  id                String   @id @default(cuid())
+  batchId           String
+  nicheKeywordId    String
+  cityId            String
+  localizedQuery    String   // e.g., "hvac repair Milwaukee"
+  keywordType       String?  // money, supporting, informational, brand, local, other
+  keywordRole       String?  // Blueprint role: primary_service_city, problem_symptom, benefit_outcome, modifier_urgency, neighborhood, etc.
+  isSkipped         Boolean  @default(false)
+  skipReason        String?
+  createdAt         DateTime @default(now())
+  batch             ScanBatch    @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  nicheKeyword      NicheKeyword  @relation(fields: [nicheKeywordId], references: [id])
+  city              CityV5000     @relation(fields: [cityId], references: [id])
+  metrics           KeywordMetricsV5000?
+  serpSnapshot      SerpSnapshotV5000?
+  difficultyScore   DifficultyScoreV5000?
+  sitePages         SitePage[]
+
+  @@unique([batchId, nicheKeywordId, cityId])
+  @@index([batchId])
+  @@index([cityId])
+  @@index([keywordRole])
+}
+
+model KeywordMetricsV5000 {
+  id                String   @id @default(cuid())
+  keywordId         String   @unique
+  searchVolume      Int?     // Search volume (renamed from volume to match Prisma client)
+  cpc               Float?
+  kd                Int?     // Keyword Difficulty from DataForSEO Labs
+  source            String   @default("keywords_everywhere")
+  retrievedAt       DateTime @default(now())
+  keyword           KeywordV5000 @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+
+  @@index([keywordId])
+}
+
+model SerpSnapshotV5000 {
+  id                String   @id @default(cuid())
+  keywordId         String   @unique
+  organicResults    Json?    // Array of organic results
+  localPackResults  Json?    // Array of local pack businesses
+  rawOrganicJson    Json?    // Full raw response for debugging
+  rawMapsJson       Json?    // Full raw response for debugging
+  createdAt         DateTime @default(now())
+  keyword           KeywordV5000 @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+
+  @@index([keywordId])
+}
+
+model DifficultyScoreV5000 {
+  id                String   @id @default(cuid())
+  keywordId         String   @unique
+  serpWeakness      Float?   // 0-100, higher = weaker SERP (easier)
+  authorityProfile  Float?   // 0-100, higher = more authority (harder)
+  localPackStrength Float?   // 0-100, higher = stronger pack (harder)
+  onpageCompetence  Float?   // 0-100, higher = more optimized (harder)
+  finalDifficulty   Float?   // 0-100, higher = harder
+  opportunity       Float?   // Calculated opportunity score
+  // Math breakdown fields
+  serpDifficulty    Float?   // 100 - serpWeakness
+  kdComponent       Float?   // kd * 0.6
+  serpComponent     Float?   // serpDifficulty * 0.15
+  packComponent     Float?   // packStrength * 0.15
+  onpageComponent   Float?   // onpage * 0.10
+  cpcMultiplier     Float?   // max(0.5, min(2.0, cpc / 10))
+  leadValueMultiplier Float? // leadValue / 50
+  baseOpportunity   Float?   // volume * (100 - difficulty) / 100
+  createdAt         DateTime @default(now())
+  keyword           KeywordV5000 @relation(fields: [keywordId], references: [id], onDelete: Cascade)
+
+  @@index([keywordId])
+  @@index([opportunity])
+  @@index([finalDifficulty])
+}
+
+// Site Builder Models
+model Site {
+  id                String   @id @default(cuid())
+  accountId         String?
+  batchId           String?  // Optional link to ScanBatch
+  batch             ScanBatch? @relation(fields: [batchId], references: [id])
+  nicheId           String
+  niche             Niche    @relation(fields: [nicheId], references: [id])
+  account           Account? @relation(fields: [accountId], references: [id])
+  city              String
+  state             String
+  country           String   @default("US")
+  leadValue         Float    // $/lead from UI
+  domain            String?  // e.g., 'wesleychapelhvac.com'
+  phoneNumber       String? // Twilio phone (legacy, use trackingNumber)
+  sheetId           String?  // Google Sheet ID
+  wpBaseUrl         String?  // WordPress site URL
+  wpSiteId          String?  // Optional, for multisite setups
+  status            SiteStatus @default(SETUP)
+  errorMessage      String?  // Error details if status='error'
+  // Site Factory fields
+  siteName          String?  // Brand name like "Wesley Chapel HVAC Pros"
+  email             String?  // info@domain.com
+  twilioNumber      String?  // Purchased Twilio number (legacy, use trackingNumber)
+  twilioNumberSid   String?  // Twilio resource ID
+  forwardToNumber   String?  // Where calls forward to
+  registrar         String?  // "namecheap" | null
+  logoUrl           String?  // URL to logo image
+  promptProfileId   String?  // Link to PromptProfile
+  promptProfile     PromptProfile? @relation(fields: [promptProfileId], references: [id])
+  // Phone number options
+  phoneSource       PhoneSource?
+  trackingNumber    String?  // Canonical tracking number (used in GPT, BrandSpec, WP)
+  ringbaNumberId    String?  // Ringba-specific number ID
+  // WP Config
+  wpUser            String?  // WP username used with application password
+  wpAppPassword     String?  // encrypted / stored server-side only
+  wpPluginVersion   String?  // for debugging contract changes
+  wpApiBase         String?  // "https://site.com/wp-json/nichehunter/v1"
+  // Search Console
+  searchConsolePropertyId String? // "sc-domain:site.com"
+  // Cost tracking (in cents)
+  domainCostCents Int? // e.g., 1200 = $12/year
+  phoneCostCents Int?  // e.g., 100 = $1/month
+  hostingCostCents Int? // e.g., 500 = $5/month
+  aiCostCents Int?     // accumulated AI generation costs
+  // Revenue
+  monthlyRevenueCents Int? // what client pays
+  // Tracking
+  voipmsAccountId String? // for VoIP.ms API
+  publicToken String? @unique // for client portal access
+  // Health checks
+  lastHealthCheckAt DateTime?
+  healthStatus String? // 'healthy' | 'degraded' | 'down'
+  sslExpiresAt DateTime?
+  // Setup progress
+  setupProgress Int @default(0) // 0-100%
+  hasDomain Boolean @default(false)
+  hasPhone Boolean @default(false)
+  hasWordPress Boolean @default(false)
+  // Tracking timestamps
+  lastRankingCheckAt   DateTime?
+  lastCallCountCheckAt DateTime?
+  lastCitationCheckAt  DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @default(now()) @updatedAt
+  pages             SitePage[]
+  metrics           SiteMetrics[]
+  citations         SiteCitation[]
+  alerts            Alert[]
+  leads             Lead[]
+  costLogs          SiteCostLog[]
+
+  @@index([nicheId])
+  @@index([status])
+  @@index([batchId])
+  @@index([promptProfileId])
+  @@index([accountId])
+}
+
+model SitePage {
+  id                 String   @id @default(cuid())
+  siteId             String
+  site               Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  pageType           PageType
+  variantId          String?  // Blueprint variant identifier
+  slug               String   // 'ac-repair-wesley-chapel'
+  titleTag           String   // SEO title
+  h1                 String   // H1 heading
+  focusKeyword       String   // Primary keyword for this page
+  supportingKeywords String[] // Postgres array of supporting keywords
+  searchIntent       String?  // 'Transactional' | 'Commercial' | 'Informational'
+  internalLinks      String[] // Array of slugs it should link to
+  wpPageId           Int?     // WordPress page/post ID once created (changed to Int)
+  contentStatus      String   @default("not_started") // 'not_started' | 'skeleton_ready' | 'draft_generated' | 'ready_to_publish' | 'published' | 'error' (legacy)
+  generatedContent   String?  // Full HTML content (optional, can also be in Google Sheet)
+  targetWordCount    Int?     // Min-max word count from blueprint
+  orderIndex         Int      @default(0) // For page ordering
+  // Site Factory fields
+  seoTitle           String?  // Meta title for SEO
+  seoDescription     String?  // Meta description for SEO
+  htmlDraft          String?  @db.Text // GPT-generated HTML (latest draft)
+  htmlEdited         String?  @db.Text // Human-edited HTML version
+  notesForGpt        String?  @db.Text // Per-page instructions for GPT regeneration
+  humanNotes         String?  @db.Text // VA comments / things to fix
+  keyword            String?  // Alias for focusKeyword (for compatibility)
+  keywordId           String?  // FK to KeywordV5000 (local main keyword)
+  skeletonId         String?  // FK to ContentSkeleton
+  status             PageStatus @default(DRAFT)
+  wpPermalink        String?  // Full WordPress URL after publish
+  wpEditUrl          String?  // convenience
+  aiDraftJson        Json?    // structured sections
+  latestGenerationAt DateTime?
+  latestPublishedAt   DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @default(now()) @updatedAt
+  skeletons          ContentSkeleton[]
+  keywordRef         KeywordV5000? @relation(fields: [keywordId], references: [id])
+
+  @@index([siteId])
+  @@index([siteId, pageType])
+  @@index([contentStatus])
+  @@index([status])
+  @@index([keywordId])
+  @@unique([siteId, slug])
+}
+
+model ContentSkeleton {
+  id                 String   @id @default(cuid())
+  sitePageId         String
+  sitePage           SitePage  @relation(fields: [sitePageId], references: [id], onDelete: Cascade)
+  sectionId          String   // 'hero', 'problems', 'pricing', etc.
+  heading            String   // H2 text (with tokens replaced)
+  purpose            String   // One-line description
+  requiredKeywordRoles String[] // Array of keyword roles that must appear
+  optionalKeywordRoles String[] // Array of optional keyword roles
+  localHints         String[] // e.g., 'mention hot Florida summers'
+  styleVariant       String?  // 'straight' | 'conversational' | 'urgency' | 'costFocused' | 'maintenanceFocused'
+  targetWordCount    Int      // Target words for this section
+  minWords           Int?     // Minimum words
+  maxWords           Int?     // Maximum words
+  orderIndex         Int      // Section order on page
+  generatedContent   String?  // Generated HTML for this section (optional)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @default(now()) @updatedAt
+
+  @@index([sitePageId])
+  @@index([sitePageId, orderIndex])
+}
+
+model ContentWriterConfig {
+  id                 String   @id @default(cuid())
+  nicheId            String
+  niche              Niche    @relation(fields: [nicheId], references: [id], onDelete: Cascade)
+  systemPrompt       String?  // Base GPT system prompt
+  tone               String?  // 'professional' | 'conversational' | 'urgent' | 'friendly'
+  styleRules         String? // Custom style instructions
+  brandVoice         String? // Brand voice description
+  terminology        String? // Preferred terminology
+  thingsToAvoid      String? // Things to avoid in content
+  exampleContent     String? // Example content snippets
+  externalLinkDomains String[] // Whitelist of trusted domains for external links
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @default(now()) @updatedAt
+
+  @@unique([nicheId])
+  @@index([nicheId])
+}
+
+// Site Factory: Prompt Profile for custom GPT behavior
+model PromptProfile {
+  id                 String   @id @default(cuid())
+  name               String   // "Default Local SEO", "Aggressive HVAC", etc.
+  systemPrompt       String?  @db.Text // Base system message for GPT
+  styleGuidelines    String?  @db.Text // Freeform text or JSON with tone, do/don'ts
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @default(now()) @updatedAt
+  sites              Site[]   // Sites using this profile
+
+  @@index([name])
+}
+
+// Metrics & Tracking
+model SiteMetrics {
+  id          String   @id @default(cuid())
+  siteId      String
+  date        DateTime @db.Date
+  calls       Int      @default(0)
+  callMinutes Int      @default(0)
+  formLeads   Int      @default(0)
+  pageViews   Int      @default(0)
+  impressions Int      @default(0)
+  clicks      Int      @default(0)
+  avgPosition Float?
+  
+  site        Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  
+  @@unique([siteId, date])
+  @@index([siteId])
+  @@index([date])
+}
+
+model SiteCitation {
+  id        String   @id @default(cuid())
+  siteId    String
+  source    String   // "Google Business Profile", "Yelp", "Angi", etc.
+  url       String
+  nap       String?  // Name, Address, Phone string for consistency checking
+  verified  Boolean  @default(false)
+  // NAP tracking for consistency
+  listedName String?
+  listedAddress String?
+  listedPhone String?
+  priority Int @default(3) // 1=critical (GBP), 5=low priority
+  autoSubmitted Boolean @default(false)
+  submittedAt DateTime?
+  
+  site      Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([siteId])
+}
+
+model Lead {
+  id String @id @default(cuid())
+  siteId String
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  
+  type LeadType // CALL or FORM
+  contactName String?
+  contactPhone String?
+  contactEmail String?
+  message String?
+  
+  source String? // 'contact_form', 'hero_cta', etc.
+  createdAt DateTime @default(now())
+  
+  @@index([siteId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+model SiteCostLog {
+  id String @id @default(cuid())
+  siteId String
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  
+  date DateTime @default(now())
+  type String // 'domain_registration', 'phone_monthly', 'hosting', 'ai_generation'
+  amountCents Int
+  provider String? // 'namecheap', 'twilio', 'ringba', 'voipms', 'openai'
+  description String?
+  
+  @@index([siteId])
+  @@index([date])
+}
+
+model Alert {
+  id          String   @id @default(cuid())
+  siteId      String
+  type        String   // "NO_LEADS", "CITATIONS_STALE", "RANKINGS_DROP"
+  severity    String   // "LOW", "MEDIUM", "HIGH"
+  message     String
+  dismissed   Boolean  @default(false)
+  
+  site        Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  
+  @@index([siteId])
+  @@index([dismissed])
+}
