@@ -186,7 +186,8 @@ const primaryServiceSections: SectionBlueprint[] = [
     keywordRules: lightRules,
     internalLinkTargets: ['blog_support_posts', 'service_faq'],
     includeIf: (args) => {
-      return args.keywordRoles.get('problem_symptom')?.length > 0 || false;
+      const problemSymptoms = args.keywordRoles.get('problem_symptom');
+      return (problemSymptoms && problemSymptoms.length > 0) || false;
     },
   },
   {

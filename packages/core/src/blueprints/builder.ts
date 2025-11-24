@@ -151,8 +151,9 @@ export function applyBlueprintToPage(
     const localHints = getLocalHints(context.state);
     
     // Determine style variant
-    let styleVariant = section.styleVariant || 'straight';
-    if (context.keywordRoles.get('modifier_urgency')?.length > 0) {
+    let styleVariant = 'straight'; // Default value
+    const urgencyKeywords = context.keywordRoles.get('modifier_urgency');
+    if (urgencyKeywords && urgencyKeywords.length > 0) {
       styleVariant = 'urgency';
     }
     

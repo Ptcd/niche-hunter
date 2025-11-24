@@ -8,10 +8,11 @@ cd ../..
 # Generate Prisma client
 npm run db:generate --workspace=packages/db
 
-# Build workspace packages (db, core, and crawler)
+# Build packages in dependency order
 npm run build --workspace=packages/db
-npm run build --workspace=packages/core
+npm run build --workspace=packages/ai
 npm run build --workspace=packages/crawler
+npm run build --workspace=packages/core
 
 # Build web app
 cd apps/web

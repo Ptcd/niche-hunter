@@ -192,14 +192,14 @@ export async function generateContentSkeletons(siteId: string): Promise<void> {
   }
 
   // Classify keywords into roles (batch process)
-  const keywordsForClassification: KeywordForClassification[] = site.batch?.keywords.map(kw => ({
+  const keywordsForClassification: KeywordForClassification[] = (site.batch?.keywords || []).map(kw => ({
     id: kw.id,
     keyword: kw.nicheKeyword.keyword,
     localizedQuery: kw.localizedQuery,
     keywordType: kw.keywordType,
     city: kw.city.city,
     state: kw.city.state,
-  })) || [];
+  }));
 
   // Classify in batches of 50
   const batchSize = 50;

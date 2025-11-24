@@ -41,7 +41,7 @@ export async function createWPPage(
     throw new Error(`WordPress API error: ${response.status} - ${error}`);
   }
 
-  const page = await response.json();
+  const page: any = await response.json();
   return String(page.id);
 }
 
@@ -93,7 +93,8 @@ export async function getWPPages(config: WordPressConfig): Promise<any[]> {
     throw new Error(`WordPress API error: ${response.status} - ${error}`);
   }
 
-  return await response.json();
+  const pages: any[] = await response.json();
+  return pages;
 }
 
 /**
