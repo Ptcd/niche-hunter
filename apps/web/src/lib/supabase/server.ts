@@ -21,9 +21,12 @@ export function createRouteHandlerClient(req: NextApiRequest, res: NextApiRespon
   let initialSession = null;
   if (sessionCookie) {
     try {
-      initialSession = typeof sessionCookie === 'string' ? JSON.parse(sessionCookie) : sessionCookie;
+      // Cookie value is URL encoded, so decode it first
+      const decoded = typeof sessionCookie === 'string' ? decodeURIComponent(sessionCookie) : sessionCookie;
+      initialSession = typeof decoded === 'string' ? JSON.parse(decoded) : decoded;
     } catch (e) {
       // Invalid cookie, ignore
+      console.warn('[createRouteHandlerClient] Failed to parse session cookie:', e);
     }
   }
 

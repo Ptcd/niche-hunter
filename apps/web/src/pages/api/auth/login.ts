@@ -36,22 +36,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(401).json({ error: 'No session created' });
     }
 
-    // Set session cookies manually
-    // Supabase uses sb-<project-ref>-auth-token and sb-<project-ref>-auth-token.0, etc.
+    // Set session cookies manually using Supabase's expected format
+    // Supabase expects cookies in format: sb-<project-ref>-auth-token
     const projectRef = process.env.NEXT_PUBLIC_SUPABASE_URL?.match(/https:\/\/([^.]+)\.supabase\.co/)?.[1] || 'fpwayqwhdendrgtottwj';
-    const accessToken = data.session.access_token;
-    const refreshToken = data.session.refresh_token;
+    const cookieName = `sb-${projectRef}-auth-token`;
+    
+    // Create session object for cookie
+    const sessionData = {
+      access_token: data.session.access_token,
+      refresh_token: data.session.refresh_token,
+      expires_at: data.session.expires_at,
+      expires_in: data.session.expires_in,
+      token_type: data.session.token_type,
+      user: data.session.user,
+    };
 
-    // Set access token cookie
+    // URL encode the JSON string to avoid issues with special characters
+    const cookieValue = encodeURIComponent(JSON.stringify(sessionData));
+    const maxAge = data.session.expires_in || 3600;
+    
+    // Set cookie with proper attributes
     res.setHeader('Set-Cookie', [
-      `sb-${projectRef}-auth-token=${JSON.stringify({
-        access_token: accessToken,
-        refresh_token: refreshToken,
-        expires_at: data.session.expires_at,
-        expires_in: data.session.expires_in,
-        token_type: data.session.token_type,
-        user: data.session.user,
-      })}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${data.session.expires_in || 3600}`,
+      `${cookieName}=${cookieValue}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`,
     ]);
 
     return res.status(200).json({
