@@ -244,7 +244,7 @@ Output ONLY the content text (no markdown, no code blocks, just the content).
 async function generateDefaultSections(
   pageType: PageType,
   context: PageContext,
-  page: { focusKeyword: string }
+  page: { focusKeyword: string; pageType: PageType }
 ): Promise<Section[]> {
   const sections: Section[] = [];
 
