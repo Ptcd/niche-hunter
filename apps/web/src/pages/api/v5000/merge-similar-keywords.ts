@@ -106,8 +106,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (group.length > 1) {
           // Sort by volume (descending), then by keyword length (ascending)
           group.sort((a, b) => {
-            const volA = a.metrics?.volume || 0;
-            const volB = b.metrics?.volume || 0;
+            const volA = a.metrics?.searchVolume || 0;
+            const volB = b.metrics?.searchVolume || 0;
             if (volB !== volA) return volB - volA;
             return a.nicheKeyword.keyword.length - b.nicheKeyword.keyword.length;
           });
@@ -116,11 +116,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           const mergeKeywords = group.slice(1);
 
           console.log(`   🔄 Merging ${group.length} variants of "${normalized}":`);
-          console.log(`      ✅ Keeping: "${keepKeyword.nicheKeyword.keyword}" (vol: ${keepKeyword.metrics?.volume || 0})`);
+          console.log(`      ✅ Keeping: "${keepKeyword.nicheKeyword.keyword}" (vol: ${keepKeyword.metrics?.searchVolume || 0})`);
           
           for (const mergeKw of mergeKeywords) {
             try {
-              console.log(`      ❌ Merging: "${mergeKw.nicheKeyword.keyword}" (vol: ${mergeKw.metrics?.volume || 0})`);
+              console.log(`      ❌ Merging: "${mergeKw.nicheKeyword.keyword}" (vol: ${mergeKw.metrics?.searchVolume || 0})`);
               
               // Delete related records first
               await prisma.keywordMetricsV5000.deleteMany({
@@ -211,8 +211,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (equivalent.length > 1) {
           // Sort by volume
           equivalent.sort((a, b) => {
-            const volA = a.metrics?.volume || 0;
-            const volB = b.metrics?.volume || 0;
+            const volA = a.metrics?.searchVolume || 0;
+            const volB = b.metrics?.searchVolume || 0;
             if (volB !== volA) return volB - volA;
             return a.nicheKeyword.keyword.length - b.nicheKeyword.keyword.length;
           });
