@@ -6,7 +6,7 @@
  */
 
 import { prisma } from '@niche-hunter/db';
-import { classifyKeywordWithScope } from './keyword-classifier';
+import { classifyKeywordWithScope, KeywordType } from './keyword-classifier';
 import { deriveClusterKey } from './cluster-mappings';
 import { getInternalLinksForPage } from './internal-link-generator';
 import { findNearbyCities, getPrimaryCityFromBatch } from './geo-utils';
@@ -150,7 +150,7 @@ function getServiceSchema(serviceRoot: string): string {
 // Normalize keyword row from database
 function normalizeKeywordRow(nk: NicheKeywordWithIncludes, batch: BatchWithNiche): KeywordRow[] {
   const classification = classifyKeywordWithScope(nk.keyword);
-  const type = (nk.keywordType || 'other') as KeywordRow['type'];
+  const type = (nk.keywordType || 'other') as KeywordType;
   const scope = (nk.scope || 'local') as 'local' | 'national';
   
   // If keyword has city data, create one row per city (local)

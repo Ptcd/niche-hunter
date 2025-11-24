@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '@niche-hunter/db';
+import { KeywordType } from '../../../../../lib/keyword-classifier';
 
 /**
  * Get keyword statistics for a batch (local vs national, by type)
@@ -53,7 +54,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     for (const nk of allKeywords) {
       const scope = nk.scope || 'local'; // Default to local if not set
-      const type = nk.keywordType || 'other';
+      const type = (nk.keywordType || 'other') as KeywordType;
 
       if (scope === 'local' || scope === null) {
         stats.local.total++;

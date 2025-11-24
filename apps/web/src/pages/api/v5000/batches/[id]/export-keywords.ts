@@ -1,7 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '@niche-hunter/db';
 import ExcelJS from 'exceljs';
-import { classifyKeywordWithScope, getKeywordTypeLabel } from '../../../../../lib/keyword-classifier';
+import { classifyKeywordWithScope, getKeywordTypeLabel, KeywordType } from '../../../../../lib/keyword-classifier';
 import { buildPagePlan } from '../../../../../lib/page-plan-builder';
 
 /**
@@ -116,7 +116,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (typeKeywords.length === 0) continue;
 
         // Add type header
-        const typeLabel = getKeywordTypeLabel(type as any);
+        const typeLabel = getKeywordTypeLabel(type as KeywordType | null);
         sheet.getRow(rowNum).font = { bold: true, size: 12 };
         sheet.getRow(rowNum).fill = {
           type: 'pattern',
@@ -159,7 +159,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
           const row = sheet.getRow(rowNum);
           row.getCell(1).value = nk.keyword;
-          row.getCell(2).value = getKeywordTypeLabel(nk.keywordType as any);
+          row.getCell(2).value = getKeywordTypeLabel(nk.keywordType as KeywordType | null);
           row.getCell(3).value = avgVolume;
           row.getCell(4).value = avgDifficulty !== null ? avgDifficulty : 'N/A';
           row.getCell(5).value = avgCpc !== null ? `$${avgCpc.toFixed(2)}` : 'N/A';
