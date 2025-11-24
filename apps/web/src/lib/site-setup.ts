@@ -184,7 +184,7 @@ export async function generateContentSkeletons(siteId: string): Promise<void> {
             },
           },
         },
-      } : null,
+      } : undefined,
     },
   });
 

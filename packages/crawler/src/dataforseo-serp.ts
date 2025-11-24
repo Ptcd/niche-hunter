@@ -8,22 +8,8 @@
  * - DATAFORSEO_PASSWORD: Your DataForSEO password
  */
 
-export interface OrganicResult {
-  domain: string;
-  url: string;
-  title: string;
-  snippet: string;
-  position: number;
-}
-
-export interface LocalBusiness {
-  name: string;
-  category: string;
-  rating: number | null;
-  reviewsCount: number | null;
-  websiteDomain: string | null;
-  address?: string;
-}
+// Re-export types from core to maintain backward compatibility
+export type { OrganicResult, LocalBusiness } from '@niche-hunter/core';
 
 interface DataForSEOSERPResponse {
   version: string;

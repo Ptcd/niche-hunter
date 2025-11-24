@@ -5,7 +5,7 @@
  * using DataForSEO KD + local SERP heuristics
  */
 
-import type { OrganicResult, LocalBusiness } from '@niche-hunter/crawler';
+import type { OrganicResult, LocalBusiness } from '../types/serp';
 
 export interface DifficultyBreakdown {
   serpWeakness: number; // 0-100, higher = weaker SERP (easier)
