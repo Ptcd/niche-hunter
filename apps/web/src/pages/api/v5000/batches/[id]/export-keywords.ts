@@ -162,8 +162,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           row.getCell(2).value = getKeywordTypeLabel(nk.keywordType as KeywordType | null);
           row.getCell(3).value = avgVolume;
           row.getCell(4).value = avgDifficulty !== null ? avgDifficulty : 'N/A';
-          const cpcValue: number | null = avgCpc;
-          row.getCell(5).value = cpcValue !== null ? `$${cpcValue.toFixed(2)}` : 'N/A';
+          let cpcDisplay = 'N/A';
+          if (avgCpc !== null && typeof avgCpc === 'number') {
+            cpcDisplay = `$${avgCpc.toFixed(2)}`;
+          }
+          row.getCell(5).value = cpcDisplay;
           row.getCell(6).value = classification.suggestedPageType;
           row.getCell(7).value = classification.scope === 'local' ? 'Local Search' : 'National Search';
           
