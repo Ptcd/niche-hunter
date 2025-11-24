@@ -56,7 +56,7 @@ export async function publishSitePages(
     pagesToPublish = pagesToPublish.filter((p) => p.status === PageStatus.APPROVED);
   } else if (options.mode === 'all-drafts') {
     pagesToPublish = pagesToPublish.filter((p) =>
-      [PageStatus.DRAFT, PageStatus.APPROVED].includes(p.status as PageStatus)
+      p.status === PageStatus.DRAFT || p.status === PageStatus.APPROVED
     );
   } else if (options.mode === 'single' && options.pageId) {
     const page = pagesToPublish.find((p) => p.id === options.pageId);

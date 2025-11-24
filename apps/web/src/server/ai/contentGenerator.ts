@@ -333,6 +333,10 @@ async function generateDefaultSections(
   for (const section of sections) {
     if (section.type !== 'trust' && section.type !== 'contact' && section.type !== 'footer') {
       try {
+        const pageSpec: { focusKeyword: string; pageType: PageType } = {
+          focusKeyword: page.focusKeyword,
+          pageType: page.pageType,
+        };
         section.content = await generateSectionContent(
           {
             sectionId: section.id,
@@ -344,7 +348,7 @@ async function generateDefaultSections(
             localHints: [`Mention ${context.city}, ${context.state}`],
           },
           context,
-          page
+          pageSpec
         );
       } catch (error) {
         console.error(`Failed to generate content for section ${section.id}:`, error);

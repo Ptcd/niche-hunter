@@ -554,7 +554,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         for (let i = 0; i < templateKeywords.length; i += 100) {
           const batch = templateKeywords.slice(i, i + 100);
           // Templates already include city, so use as-is (or add city if missing)
-          const templateQueries = batch.map(kw => {
+          const templateQueries = batch.map((kw: string) => {
             if (kw.includes(city.toLowerCase())) {
               return kw; // Already has city
             }

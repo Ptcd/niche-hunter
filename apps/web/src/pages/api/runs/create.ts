@@ -984,7 +984,7 @@ export async function processAnalysis(
                 
                 console.log(`   📊 Calculating competition strength...`);
                 competitionStrength = calculateCompetitionStrength(competitors);
-                console.log(`   💪 Competition strength: ${competitionStrength.toFixed(1)}/10`);
+                console.log(`   💪 Competition strength: ${competitionStrength ? competitionStrength.toFixed(1) : 'N/A'}/10`);
                 
                 // Log competitor breakdown
                 const aggregators = competitors.filter(c => c.isAggregator).length;

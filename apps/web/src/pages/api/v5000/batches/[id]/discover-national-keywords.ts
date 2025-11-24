@@ -539,7 +539,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         for (const [keyword, data] of volumeData.entries()) {
           try {
             const volume = data.volume || 0;
-            const competition = data.competition || 0;
+            const competition = (data as { volume: number; cpc: number; competition?: number }).competition || 0;
 
             // Classify keyword to determine threshold
             const keywordType = classifyKeyword(keyword);

@@ -43,7 +43,11 @@ async function getTopKeywordsForSite(siteId: string, limit: number = 10): Promis
     },
   });
 
-  if (!site?.batch?.keywords || site.batch.keywords.length === 0) {
+  if (!site) {
+    throw new Error(`Site ${siteId} not found`);
+  }
+
+  if (!site.batch?.keywords || site.batch.keywords.length === 0) {
     // Fallback: use niche keywords if batch keywords not available
     const niche = await prisma.niche.findUnique({
       where: { id: site.nicheId },

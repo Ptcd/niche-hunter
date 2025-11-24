@@ -124,7 +124,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         results.push({
           pageId: page.id,
-          wpPageId,
+          wpPageId: wpPageId ? String(wpPageId) : undefined,
           success: true,
         });
       } catch (error: any) {

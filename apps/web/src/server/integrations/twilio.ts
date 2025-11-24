@@ -55,7 +55,7 @@ export async function getCallLogs(
       limit: 1000, // Adjust as needed
     });
 
-    return calls.map((call) => ({
+    return calls.map((call: any) => ({
       sid: call.sid,
       to: call.to,
       from: call.from || '',

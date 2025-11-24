@@ -900,7 +900,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async (context) => 
     
     console.log('[getServerSideProps] Fetching scans for run:', run.id);
 
-    let scans;
+    let scans: any[] = [];
     try {
       // Retry logic for database connection issues
       let retries = 3;
@@ -909,12 +909,6 @@ export const getServerSideProps: GetServerSideProps<Props> = async (context) => 
           scans = await prisma.scan.findMany({
             where: { runId: id },
             orderBy: { opportunity: 'desc' },
-            include: {
-              keywordMetrics: {
-                orderBy: { priority: 'desc' },
-                take: 10, // Top 10 keywords
-              },
-            },
           });
           break; // Success, exit retry loop
         } catch (dbError: any) {
@@ -929,6 +923,8 @@ export const getServerSideProps: GetServerSideProps<Props> = async (context) => 
           throw dbError;
         }
       }
+      // Add empty keywordMetrics array to each scan
+      scans = scans.map((s: any) => ({ ...s, keywordMetrics: s.keywordMetrics || [] }));
       console.log('[getServerSideProps] Found', scans.length, 'scans');
     } catch (scanError: any) {
       console.error('[getServerSideProps] Error fetching scans:', scanError);
