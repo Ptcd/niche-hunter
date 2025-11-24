@@ -4,7 +4,6 @@
   "devCommand": "npm run dev",
   "installCommand": "cd ../.. && npm install",
   "framework": "nextjs",
-  "rootDirectory": ".",
   "outputDirectory": ".next",
   "regions": ["iad1"],
   "functions": {
