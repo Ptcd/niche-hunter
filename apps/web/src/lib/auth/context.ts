@@ -33,31 +33,31 @@ export async function getAuthContext(
     
     // Try getSession first, but if that fails, try getUser with the token from cookies
     let session = null;
-    let user = null;
+    let supabaseUser = null;
     
     const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
     if (!sessionError && sessionData?.session) {
       session = sessionData.session;
-      user = sessionData.session.user;
+      supabaseUser = sessionData.session.user;
     } else {
       // Fallback: try getUser (works with Authorization header)
       const { data: userData, error: userError } = await supabase.auth.getUser();
       if (!userError && userData?.user) {
-        user = userData.user;
+        supabaseUser = userData.user;
         // Construct minimal session from user
         // Note: This won't have refresh token, but should work for auth checks
         session = {
-          user: user,
+          user: supabaseUser,
           access_token: '', // Will be in Authorization header
         } as any;
       }
     }
 
-    if (!session || !user) {
+    if (!session || !supabaseUser) {
       return null;
     }
 
-    const sbUserId = user.id;
+    const sbUserId = supabaseUser.id;
 
     // Find internal User record
     const user = await prisma.user.findUnique({
