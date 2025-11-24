@@ -40,6 +40,10 @@ export async function getAuthContext(
       session = sessionData.session;
       supabaseUser = sessionData.session.user;
     } else {
+      // Log the error for debugging
+      if (sessionError) {
+        console.warn('[getAuthContext] getSession error:', sessionError.message);
+      }
       // Fallback: try getUser (works with Authorization header)
       const { data: userData, error: userError } = await supabase.auth.getUser();
       if (!userError && userData?.user) {
@@ -50,6 +54,17 @@ export async function getAuthContext(
           user: supabaseUser,
           access_token: '', // Will be in Authorization header
         } as any;
+      } else {
+        if (userError) {
+          console.warn('[getAuthContext] getUser error:', userError.message);
+        }
+        // Check if we have a session cookie but it's invalid
+        const projectRef = process.env.NEXT_PUBLIC_SUPABASE_URL?.match(/https:\/\/([^.]+)\.supabase\.co/)?.[1] || 'fpwayqwhdendrgtottwj';
+        const cookieName = `sb-${projectRef}-auth-token`;
+        const hasCookie = !!req.cookies[cookieName];
+        if (hasCookie) {
+          console.warn('[getAuthContext] Session cookie exists but session is invalid - may need to re-login');
+        }
       }
     }
 

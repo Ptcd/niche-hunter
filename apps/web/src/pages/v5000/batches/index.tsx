@@ -30,10 +30,16 @@ export default function BatchesPage() {
   const fetchBatches = async () => {
     try {
       setError(null);
-      const res = await fetch('/api/v5000/batches');
+      const res = await fetch('/api/v5000/batches', {
+        credentials: 'include', // Ensure cookies are sent
+      });
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({ error: 'Failed to fetch batches' }));
-        setError(errorData.error || `Server error: ${res.status}`);
+        if (res.status === 401) {
+          setError('Unauthorized: Your session may have expired. Please log in again.');
+        } else {
+          setError(errorData.error || `Server error: ${res.status}`);
+        }
         setBatches([]);
         return;
       }
@@ -103,7 +109,25 @@ export default function BatchesPage() {
             border: '1px solid #f5c6cb',
           }}
         >
-          <strong>Error:</strong> {error}
+          <div style={{ marginBottom: error.includes('Unauthorized') ? '0.75rem' : '0' }}>
+            <strong>Error:</strong> {error}
+          </div>
+          {error.includes('Unauthorized') && (
+            <button
+              onClick={() => router.push('/login')}
+              style={{
+                padding: '0.5rem 1rem',
+                backgroundColor: '#0070f3',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '0.9rem',
+              }}
+            >
+              Go to Login
+            </button>
+          )}
         </div>
       )}
 
@@ -171,6 +195,7 @@ export default function BatchesPage() {
     </div>
   );
 }
+
 
 
 
