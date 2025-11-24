@@ -910,9 +910,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
 
         // Calculate difficulty scores
-        const serpWeakness = organicSerp.length > 0 ? calculateSerpWeakness(organicSerp, record.keyword) : null;
-        const localPackStrength = mapsSerp.length > 0 ? calculateLocalPackStrength(mapsSerp, record.keyword) : null;
-        const onpageCompetence = organicSerp.length > 0 ? calculateOnpageCompetence(organicSerp, record.keyword, city) : null;
+        // Use default values (50 = neutral) when SERP data is missing
+        const serpWeakness = organicSerp.length > 0 ? calculateSerpWeakness(organicSerp, record.keyword) : 50;
+        const localPackStrength = mapsSerp.length > 0 ? calculateLocalPackStrength(mapsSerp, record.keyword) : 50;
+        const onpageCompetence = organicSerp.length > 0 ? calculateOnpageCompetence(organicSerp, record.keyword, city) : 50;
         const finalDifficulty = calculateFinalDifficulty(
           metrics.kd || null,
           serpWeakness,
@@ -932,13 +933,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         );
 
         // Store difficulty score
+        // Store null values when SERP data wasn't available (use null instead of defaults for database)
+        const serpWeaknessForDb = organicSerp.length > 0 ? serpWeakness : null;
+        const localPackStrengthForDb = mapsSerp.length > 0 ? localPackStrength : null;
+        const onpageCompetenceForDb = organicSerp.length > 0 ? onpageCompetence : null;
+        
         await prisma.difficultyScoreV5000.upsert({
           where: { keywordId: record.id },
           create: {
             keywordId: record.id,
-            serpWeakness: serpWeakness,
-            localPackStrength: localPackStrength,
-            onpageCompetence: onpageCompetence,
+            serpWeakness: serpWeaknessForDb,
+            localPackStrength: localPackStrengthForDb,
+            onpageCompetence: onpageCompetenceForDb,
             finalDifficulty: finalDifficulty.finalDifficulty,
             opportunity: opportunityBreakdown.opportunity,
             serpDifficulty: finalDifficulty.serpDifficulty,
@@ -951,9 +957,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             baseOpportunity: opportunityBreakdown.baseOpportunity,
           },
           update: {
-            serpWeakness: serpWeakness,
-            localPackStrength: localPackStrength,
-            onpageCompetence: onpageCompetence,
+            serpWeakness: serpWeaknessForDb,
+            localPackStrength: localPackStrengthForDb,
+            onpageCompetence: onpageCompetenceForDb,
             finalDifficulty: finalDifficulty.finalDifficulty,
             opportunity: opportunityBreakdown.opportunity,
             serpDifficulty: finalDifficulty.serpDifficulty,
