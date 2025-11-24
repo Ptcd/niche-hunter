@@ -23,7 +23,7 @@ interface KeywordResult {
     keyword: string;
   };
   metrics?: {
-    volume: number | null;
+    searchVolume: number | null;
     cpc: number | null;
     kd: number | null;
   };
