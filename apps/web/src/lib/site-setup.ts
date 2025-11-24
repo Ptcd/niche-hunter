@@ -162,6 +162,7 @@ export async function generateContentSkeletons(siteId: string): Promise<void> {
   }
 
   // Now load full site with batch keywords
+  // Always include batch to avoid TypeScript conditional include issues
   const site = await prisma.site.findUnique({
     where: { id: siteId },
     include: {
@@ -183,7 +184,7 @@ export async function generateContentSkeletons(siteId: string): Promise<void> {
             },
           },
         },
-      } : undefined,
+      } : null,
     },
   });
 
@@ -192,7 +193,9 @@ export async function generateContentSkeletons(siteId: string): Promise<void> {
   }
 
   // Classify keywords into roles (batch process)
-  const keywordsForClassification: KeywordForClassification[] = (site.batch?.keywords || []).map(kw => ({
+  // Handle case where batch might be null
+  const batchKeywords = site.batch && 'keywords' in site.batch ? site.batch.keywords : [];
+  const keywordsForClassification: KeywordForClassification[] = batchKeywords.map((kw: any) => ({
     id: kw.id,
     keyword: kw.nicheKeyword.keyword,
     localizedQuery: kw.localizedQuery,
@@ -226,7 +229,7 @@ export async function generateContentSkeletons(siteId: string): Promise<void> {
 
   // Extract keyword roles map
   const keywordRolesMap = new Map<KeywordRole, string[]>();
-  for (const kw of site.batch?.keywords || []) {
+  for (const kw of batchKeywords) {
     if (kw.keywordRole) {
       const role = kw.keywordRole as KeywordRole;
       if (!keywordRolesMap.has(role)) {

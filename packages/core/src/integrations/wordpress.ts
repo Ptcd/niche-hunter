@@ -93,7 +93,7 @@ export async function getWPPages(config: WordPressConfig): Promise<any[]> {
     throw new Error(`WordPress API error: ${response.status} - ${error}`);
   }
 
-  const pages: any[] = await response.json();
+  const pages = await response.json() as any[];
   return pages;
 }
 

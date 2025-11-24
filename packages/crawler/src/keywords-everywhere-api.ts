@@ -577,7 +577,7 @@ export async function getRelatedKeywordsFromSERP(
         if (withoutLocation.length > 3 && withoutLocation.length < 60) {
           // Check if it's similar to the base keyword (avoid completely unrelated terms)
           const baseKeywordLower = keyword.toLowerCase();
-          const hasCommonWords = withoutLocation.split(/\s+/).some(word => 
+          const hasCommonWords = withoutLocation.split(/\s+/).some((word: string) => 
             baseKeywordLower.includes(word) || word.length > 4
           );
           
@@ -600,7 +600,7 @@ export async function getRelatedKeywordsFromSERP(
         const titleWords = result.title
           .toLowerCase()
           .split(/\s+/)
-          .filter(word => word.length > 3 && !['the', 'and', 'for', 'with', 'from'].includes(word));
+          .filter((word: string) => word.length > 3 && !['the', 'and', 'for', 'with', 'from'].includes(word));
         
         // Look for keyword-like phrases (2-4 words)
         for (let i = 0; i < titleWords.length - 1; i++) {
