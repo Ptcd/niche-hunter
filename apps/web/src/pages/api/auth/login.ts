@@ -32,6 +32,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(401).json({ error: error.message });
     }
 
+    if (!data.session) {
+      return res.status(401).json({ error: 'No session created' });
+    }
+
+    // Set session cookies manually
+    // Supabase uses sb-<project-ref>-auth-token and sb-<project-ref>-auth-token.0, etc.
+    const projectRef = process.env.NEXT_PUBLIC_SUPABASE_URL?.match(/https:\/\/([^.]+)\.supabase\.co/)?.[1] || 'fpwayqwhdendrgtottwj';
+    const accessToken = data.session.access_token;
+    const refreshToken = data.session.refresh_token;
+
+    // Set access token cookie
+    res.setHeader('Set-Cookie', [
+      `sb-${projectRef}-auth-token=${JSON.stringify({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+        expires_at: data.session.expires_at,
+        expires_in: data.session.expires_in,
+        token_type: data.session.token_type,
+        user: data.session.user,
+      })}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${data.session.expires_in || 3600}`,
+    ]);
+
     return res.status(200).json({
       ok: true,
       user: data.user,

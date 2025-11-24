@@ -11,13 +11,46 @@ export function createRouteHandlerClient(req: NextApiRequest, res: NextApiRespon
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key';
 
+  // Extract project ref from URL
+  const projectRef = supabaseUrl.match(/https:\/\/([^.]+)\.supabase\.co/)?.[1] || 'fpwayqwhdendrgtottwj';
+  
+  // Read session from cookies
+  const cookieName = `sb-${projectRef}-auth-token`;
+  const sessionCookie = req.cookies[cookieName];
+  
+  let initialSession = null;
+  if (sessionCookie) {
+    try {
+      initialSession = typeof sessionCookie === 'string' ? JSON.parse(sessionCookie) : sessionCookie;
+    } catch (e) {
+      // Invalid cookie, ignore
+    }
+  }
+
   // Create client with placeholder values if env vars are missing
   // This prevents build-time errors. The client will fail at runtime if actually used without proper env vars.
   const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
       persistSession: false, // Don't persist in API routes
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+    global: {
+      headers: initialSession?.access_token ? {
+        Authorization: `Bearer ${initialSession.access_token}`,
+      } : {},
     },
   });
+
+  // Set session if we have one from cookies
+  if (initialSession?.access_token) {
+    supabase.auth.setSession({
+      access_token: initialSession.access_token,
+      refresh_token: initialSession.refresh_token,
+    }).catch(() => {
+      // Session might be expired, ignore
+    });
+  }
 
   // Validate env vars at runtime (not during build)
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
