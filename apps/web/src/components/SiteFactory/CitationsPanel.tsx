@@ -320,7 +320,15 @@ export default function CitationsPanel({ siteId }: CitationsPanelProps) {
               <button
                 onClick={() => {
                   setShowAddModal(false);
-                  setNewCitation({ source: '', url: '', nap: '' });
+                  setNewCitation({ 
+                    source: '', 
+                    url: '', 
+                    nap: '',
+                    listedName: '',
+                    listedAddress: '',
+                    listedPhone: '',
+                    priority: 3,
+                  });
                 }}
                 style={{ padding: '0.5rem 1rem', cursor: 'pointer', border: '1px solid #ddd', borderRadius: '4px' }}
               >
