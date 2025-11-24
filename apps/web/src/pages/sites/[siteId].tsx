@@ -6,7 +6,7 @@
 
 import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
-import CitationsPanel from '../../../components/SiteFactory/CitationsPanel';
+import CitationsPanel from '@/components/SiteFactory/CitationsPanel';
 
 // Leads Panel Component
 function LeadsPanel({ siteId }: { siteId: string }) {
