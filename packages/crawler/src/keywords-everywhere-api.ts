@@ -436,7 +436,7 @@ export async function getVolumeFromKeywordsEverywhereAPI(
  */
 export async function getBulkKeywordData(
   keywords: string[]
-): Promise<Map<string, { volume: number; cpc: number }>> {
+): Promise<Map<string, { volume: number; cpc: number; competition?: number }>> {
   const apiKey = await getKeywordsEverywhereAPIKey();
   if (!apiKey) {
     throw new Error('Keywords Everywhere API key not found');
@@ -444,7 +444,7 @@ export async function getBulkKeywordData(
 
   const baseUrl = 'https://api.keywordseverywhere.com/v1/get_keyword_data';
   const maxBatchSize = 100;
-  const resultMap = new Map<string, { volume: number; cpc: number }>();
+  const resultMap = new Map<string, { volume: number; cpc: number; competition?: number }>();
 
   for (let i = 0; i < keywords.length; i += maxBatchSize) {
     const batch = keywords.slice(i, i + maxBatchSize);
@@ -510,9 +510,11 @@ export async function getBulkKeywordData(
 
           if (result) {
             const cpcValue = parseFloat(result.cpc?.value || '0');
+            const competition = typeof result.competition === 'number' ? result.competition : undefined;
             resultMap.set(requestedKeyword, {
               volume: result.vol || 0,
               cpc: cpcValue,
+              competition,
             });
           } else {
             // No match found - might be because keyword format doesn't match
