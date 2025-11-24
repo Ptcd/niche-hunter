@@ -99,9 +99,9 @@ export async function publishSitePages(
     return {
       ...spec,
       externalId: page.id, // Use page ID as external ID
-      status: (options.publishStatus === 'publish' || page.status === PageStatus.APPROVED)
+      status: ((options.publishStatus === 'publish' || page.status === PageStatus.APPROVED)
         ? 'publish'
-        : 'draft',
+        : 'draft') as 'draft' | 'publish',
     };
   });
 
