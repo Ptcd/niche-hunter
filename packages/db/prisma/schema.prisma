@@ -68,25 +68,27 @@ model Run {
 }
 
 model Scan {
-  id               String   @id @default(cuid())
-  runId            String
-  city             String
-  state            String
-  zip              String?
-  keyword          String
-  serpJson         Json?
-  signalsJson      Json?
-  demandScore      Float    @default(0)
-  difficulty       Float    @default(0)
-  opportunity      Float    @default(0)
-  profitEst        Float?
-  classification   String?
-  keywords         String?
-  createdAt        DateTime @default(now())
-  domainRating     Float?
-  backlinks        Int?
-  referringDomains Int?
-  run              Run      @relation(fields: [runId], references: [id], onDelete: Cascade)
+  id                String   @id @default(cuid())
+  runId             String
+  city              String
+  state             String
+  zip               String?
+  keyword           String
+  serpJson          Json?
+  signalsJson       Json?
+  demandScore       Float    @default(0)
+  difficulty        Float    @default(0)
+  opportunity       Float    @default(0)
+  profitEst         Float?
+  classification    String?
+  keywords          String?
+  createdAt         DateTime @default(now())
+  domainRating      Float?
+  backlinks         Int?
+  referringDomains  Int?
+  timeToRank        String?  // e.g., "4-8 months"
+  competitionStrength Float? // 0-10 scale
+  run               Run      @relation(fields: [runId], references: [id], onDelete: Cascade)
 
   @@index([runId, city, state])
   @@index([opportunity])
