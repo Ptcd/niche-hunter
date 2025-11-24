@@ -1,7 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '@niche-hunter/db';
 import ExcelJS from 'exceljs';
-import { getKeywordTypeLabel } from '../../../../../lib/keyword-classifier';
+import { getKeywordTypeLabel, KeywordType } from '../../../../../lib/keyword-classifier';
 import { buildPagePlan } from '../../../../../lib/page-plan-builder';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -65,7 +65,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const localData = keywords.map((kw) => ({
       Keyword: kw.nicheKeyword.keyword,
       Volume: kw.metrics?.searchVolume || 0,
-      Type: getKeywordTypeLabel(kw.keywordType || kw.nicheKeyword.keywordType),
+      Type: getKeywordTypeLabel((kw.keywordType || kw.nicheKeyword.keywordType) as KeywordType | null),
       Scope: 'Local',
     }));
 
@@ -73,7 +73,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const nationalData = nationalKeywords.map((nk) => ({
       Keyword: nk.keyword,
       Volume: nk.nationalVolume || 0,
-      Type: getKeywordTypeLabel(nk.keywordType),
+      Type: getKeywordTypeLabel(nk.keywordType as KeywordType | null),
       Scope: 'National',
     }));
 
