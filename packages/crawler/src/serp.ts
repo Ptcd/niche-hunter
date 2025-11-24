@@ -47,10 +47,22 @@ const aggregators = JSON.parse(
   fs.readFileSync(getAggregatorsPath(), 'utf-8')
 ) as string[];
 
-const SCREENSHOT_DIR = path.join(process.cwd(), '.screenshots');
+// Use /tmp in serverless environments (Vercel, AWS Lambda, etc.) since filesystem is read-only
+// Otherwise use .screenshots in the current working directory
+const SCREENSHOT_DIR = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME
+  ? path.join('/tmp', 'screenshots')
+  : path.join(process.cwd(), 'apps', 'web', '.screenshots');
 
-if (!fs.existsSync(SCREENSHOT_DIR)) {
-  fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
+// Only create directory if we're not in a read-only filesystem environment
+// In serverless, /tmp should already exist, but we'll try to create it safely
+try {
+  if (!fs.existsSync(SCREENSHOT_DIR)) {
+    fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
+  }
+} catch (error: any) {
+  // If directory creation fails (e.g., in read-only filesystem), log warning but continue
+  // Screenshots will fail later, but the app won't crash at startup
+  console.warn(`[serp] Could not create screenshot directory ${SCREENSHOT_DIR}:`, error.message);
 }
 
 const DIRECTORY_DOMAINS = [
