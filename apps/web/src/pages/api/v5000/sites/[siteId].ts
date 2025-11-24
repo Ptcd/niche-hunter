@@ -44,6 +44,29 @@ async function handler(req: NextApiRequest & { auth: any }, res: NextApiResponse
             name: true,
           },
         },
+        batch: {
+          select: {
+            keywords: {
+              where: { isSkipped: false },
+              take: 10,
+              include: {
+                nicheKeyword: {
+                  select: {
+                    keyword: true,
+                  },
+                },
+                difficultyScore: {
+                  select: {
+                    opportunity: true,
+                  },
+                },
+              },
+              orderBy: [
+                { difficultyScore: { opportunity: 'desc' } },
+              ],
+            },
+          },
+        },
         pages: {
           orderBy: {
             orderIndex: 'asc',
@@ -74,7 +97,21 @@ async function handler(req: NextApiRequest & { auth: any }, res: NextApiResponse
       return res.status(404).json({ error: 'Site not found' });
     }
 
-    return res.status(200).json(site);
+    // Extract keywords from batch
+    const keywords: string[] = [];
+    if (site.batch?.keywords) {
+      for (const kw of site.batch.keywords) {
+        if (kw.nicheKeyword?.keyword) {
+          keywords.push(kw.nicheKeyword.keyword);
+        }
+      }
+    }
+
+    // Return site with keywords array
+    return res.status(200).json({
+      ...site,
+      keywords,
+    });
   } catch (error: any) {
     console.error('Error fetching site:', error);
     console.error('Error stack:', error?.stack);

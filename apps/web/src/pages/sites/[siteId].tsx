@@ -504,40 +504,56 @@ function VoipmsPhoneModal({ siteId, onClose, onSuccess }: { siteId: string; onCl
   );
 }
 
-// Generate domain suggestions based on city, state, and niche
-function generateDomainSuggestions(city: string, state: string, niche: string): string[] {
+// Generate domain suggestions based on city, state, keywords, and niche (fallback)
+function generateDomainSuggestions(city: string, state: string, keywords: string[], niche: string): string[] {
   // Normalize inputs: lowercase, remove spaces and special chars
   const cleanCity = city.toLowerCase().replace(/[^a-z0-9]/g, '');
   const cleanState = state.toLowerCase().replace(/[^a-z0-9]/g, '');
   const cleanNiche = niche.toLowerCase().replace(/[^a-z0-9]/g, '');
   
+  // Clean keywords: remove city/state from keyword, lowercase, remove spaces/special chars
+  const cleanKeywords = keywords.slice(0, 3).map(kw => {
+    // Remove city and state from keyword if present
+    let cleaned = kw.toLowerCase();
+    cleaned = cleaned.replace(new RegExp(city.toLowerCase(), 'gi'), '');
+    cleaned = cleaned.replace(new RegExp(state.toLowerCase(), 'gi'), '');
+    cleaned = cleaned.replace(/[^a-z0-9]/g, '');
+    return cleaned;
+  }).filter(kw => kw.length > 0);
+  
   const suggestions: string[] = [];
   
-  // Pattern 1: city + niche
-  suggestions.push(`${cleanCity}${cleanNiche}.com`);
+  // Use keywords if available, otherwise fall back to niche
+  const primaryTerms = cleanKeywords.length > 0 ? cleanKeywords : [cleanNiche];
   
-  // Pattern 2: niche + city
-  suggestions.push(`${cleanNiche}${cleanCity}.com`);
-  
-  // Pattern 3: city + niche + pros
-  suggestions.push(`${cleanCity}${cleanNiche}pros.com`);
-  
-  // Pattern 4: niche + city + state
-  suggestions.push(`${cleanNiche}${cleanCity}${cleanState}.com`);
-  
-  // Pattern 5: city + state + niche
-  suggestions.push(`${cleanCity}${cleanState}${cleanNiche}.com`);
-  
-  // Pattern 6: niche + of + city
-  suggestions.push(`${cleanNiche}of${cleanCity}.com`);
-  
-  // Pattern 7: city + niche + service (if niche doesn't already contain it)
-  if (!cleanNiche.includes('service')) {
-    suggestions.push(`${cleanCity}${cleanNiche}service.com`);
+  for (const term of primaryTerms) {
+    // Pattern 1: city + keyword
+    suggestions.push(`${cleanCity}${term}.com`);
+    
+    // Pattern 2: keyword + city
+    suggestions.push(`${term}${cleanCity}.com`);
+    
+    // Pattern 3: city + keyword + pros
+    suggestions.push(`${cleanCity}${term}pros.com`);
+    
+    // Pattern 4: keyword + city + state
+    suggestions.push(`${term}${cleanCity}${cleanState}.com`);
+    
+    // Pattern 5: city + state + keyword
+    suggestions.push(`${cleanCity}${cleanState}${term}.com`);
+    
+    // Pattern 6: keyword + of + city
+    suggestions.push(`${term}of${cleanCity}.com`);
+    
+    // Pattern 7: best + city + keyword
+    suggestions.push(`best${cleanCity}${term}.com`);
   }
   
-  // Pattern 8: best + city + niche
-  suggestions.push(`best${cleanCity}${cleanNiche}.com`);
+  // Add niche-based suggestions as fallback if we used keywords
+  if (cleanKeywords.length > 0) {
+    suggestions.push(`${cleanCity}${cleanNiche}.com`);
+    suggestions.push(`${cleanNiche}${cleanCity}.com`);
+  }
   
   // Remove duplicates and return
   return [...new Set(suggestions)];
@@ -548,7 +564,8 @@ function DomainModal({
   siteId, 
   city, 
   state, 
-  niche, 
+  niche,
+  keywords,
   onClose, 
   onSuccess 
 }: { 
@@ -556,6 +573,7 @@ function DomainModal({
   city: string;
   state: string;
   niche: string;
+  keywords: string[];
   onClose: () => void; 
   onSuccess: () => void;
 }) {
@@ -564,7 +582,7 @@ function DomainModal({
   const [checking, setChecking] = useState(false);
   const [registering, setRegistering] = useState(false);
   const [error, setError] = useState('');
-  const [suggestions] = useState<string[]>(() => generateDomainSuggestions(city, state, niche));
+  const [suggestions] = useState<string[]>(() => generateDomainSuggestions(city, state, keywords, niche));
   const [suggestionAvailability, setSuggestionAvailability] = useState<Record<string, 'unknown' | 'available' | 'taken' | 'error' | 'checking'>>({});
   const [checkingAll, setCheckingAll] = useState(false);
 
@@ -1101,6 +1119,7 @@ interface Site {
   status: string;
   pages: SitePage[];
   promptProfile: { id: string; name: string } | null;
+  keywords: string[];
 }
 
 export default function SiteFactoryDetailPage() {
@@ -1468,6 +1487,7 @@ export default function SiteFactoryDetailPage() {
           city={site.city}
           state={site.state}
           niche={site.niche.slug}
+          keywords={site.keywords || []}
           onClose={() => setShowDomainModal(false)} 
           onSuccess={fetchSite} 
         />
