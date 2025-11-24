@@ -6,7 +6,6 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/router';
-import { supabase } from '../lib/supabase/client';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -21,13 +20,16 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
       });
 
-      if (signInError) {
-        throw new Error(signInError.message);
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Login failed');
       }
 
       // Redirect to dashboard
