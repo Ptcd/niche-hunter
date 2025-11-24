@@ -8,7 +8,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { prisma } from "@niche-hunter/db";
 import { PageStatus } from "@prisma/client";
-import { generatePageContent } from "../../../../../../server/ai/contentGenerator";
+import { generatePageContent } from "../../../../../../../server/ai/contentGenerator";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
