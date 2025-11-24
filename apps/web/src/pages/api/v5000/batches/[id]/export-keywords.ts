@@ -150,7 +150,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             }
 
             const difficulties = nk.keywords
-              .map(k => k.difficultyScore?.overallDifficulty)
+              .map(k => k.difficultyScore?.finalDifficulty)
               .filter((d): d is number => d !== null && d !== undefined);
             if (difficulties.length > 0) {
               avgDifficulty = Math.round(difficulties.reduce((a, b) => a + b, 0) / difficulties.length);
