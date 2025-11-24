@@ -648,13 +648,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       },
     });
 
-    const existingKeywords = new Set(
+    const allExistingKeywordsSet = new Set(
       allNicheKeywords.map((nk) => nk.keyword.toLowerCase())
     );
 
     const missingCandidates = detectMissingKeywords(
       mergedKeywords.map((kw) => ({ keyword: kw.keyword, volume: kw.volume })),
-      existingKeywords
+      allExistingKeywordsSet
     );
 
     let missingAdded = 0;
