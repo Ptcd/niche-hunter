@@ -30,13 +30,34 @@ export async function getAuthContext(
 ): Promise<AuthContext | null> {
   try {
     const supabase = createRouteHandlerClient(req, res);
-    const { data: { session }, error } = await supabase.auth.getSession();
+    
+    // Try getSession first, but if that fails, try getUser with the token from cookies
+    let session = null;
+    let user = null;
+    
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    if (!sessionError && sessionData?.session) {
+      session = sessionData.session;
+      user = sessionData.session.user;
+    } else {
+      // Fallback: try getUser (works with Authorization header)
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (!userError && userData?.user) {
+        user = userData.user;
+        // Construct minimal session from user
+        // Note: This won't have refresh token, but should work for auth checks
+        session = {
+          user: user,
+          access_token: '', // Will be in Authorization header
+        } as any;
+      }
+    }
 
-    if (error || !session) {
+    if (!session || !user) {
       return null;
     }
 
-    const sbUserId = session.user.id;
+    const sbUserId = user.id;
 
     // Find internal User record
     const user = await prisma.user.findUnique({
