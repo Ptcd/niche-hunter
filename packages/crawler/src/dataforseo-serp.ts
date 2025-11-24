@@ -8,8 +8,11 @@
  * - DATAFORSEO_PASSWORD: Your DataForSEO password
  */
 
-// Re-export types from core to maintain backward compatibility
-export type { OrganicResult, LocalBusiness } from '@niche-hunter/core';
+// Import types from core
+import type { OrganicResult, LocalBusiness } from '@niche-hunter/core';
+
+// Re-export for backward compatibility
+export type { OrganicResult, LocalBusiness };
 
 interface DataForSEOSERPResponse {
   version: string;

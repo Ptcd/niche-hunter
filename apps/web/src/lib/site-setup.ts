@@ -194,8 +194,15 @@ export async function generateContentSkeletons(siteId: string): Promise<void> {
 
   // Classify keywords into roles (batch process)
   // Handle case where batch might be null
-  const batchKeywords = site.batch && 'keywords' in site.batch ? site.batch.keywords : [];
-  const keywordsForClassification: KeywordForClassification[] = batchKeywords.map((kw: any) => ({
+  const batchKeywords = (site.batch && 'keywords' in site.batch ? site.batch.keywords : []) as Array<{
+    id: string;
+    nicheKeyword: { keyword: string };
+    localizedQuery: string;
+    keywordType: string;
+    city: { city: string; state: string };
+    keywordRole?: string | null;
+  }>;
+  const keywordsForClassification: KeywordForClassification[] = batchKeywords.map((kw) => ({
     id: kw.id,
     keyword: kw.nicheKeyword.keyword,
     localizedQuery: kw.localizedQuery,

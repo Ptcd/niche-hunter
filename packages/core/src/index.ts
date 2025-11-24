@@ -1,4 +1,5 @@
 export * from './types';
+export * from './types/serp';
 export * from './scoring';
 export { loadKeywordTaxonomy, loadIntentWeights, getAllKeywords } from './keywords';
 export * from './keywords/processor';
