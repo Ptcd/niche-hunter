@@ -152,7 +152,7 @@ export async function getRelatedKeywordsFromAPI(
     });
     
     console.log(`🔍 [DISCOVER-KEYWORDS] Response status: ${response.status} ${response.statusText}`);
-    console.log(`🔍 [DISCOVER-KEYWORDS] Response headers:`, Object.fromEntries(response.headers.entries()));
+    // Note: Headers.entries() not available in all environments, skip header logging
     
     if (!response.ok) {
       const errorText = await response.text().catch(() => response.statusText);
@@ -195,7 +195,7 @@ export async function getRelatedKeywordsFromAPI(
       
       console.log(`✅ [DISCOVER-KEYWORDS] Successfully parsed ${relatedKeywords.length} related keywords (filtered from ${data.data.length} total)`);
       if (relatedKeywords.length > 0) {
-        console.log(`   Top 5 keywords:`, relatedKeywords.slice(0, 5).map(k => `${k.keyword} (vol: ${k.volume})`).join(', '));
+        console.log(`   Top 5 keywords:`, relatedKeywords.slice(0, 5).map((k: { keyword: string; volume: number }) => `${k.keyword} (vol: ${k.volume})`).join(', '));
       }
       
       return relatedKeywords;

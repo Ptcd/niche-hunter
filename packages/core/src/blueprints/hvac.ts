@@ -41,7 +41,7 @@ const homeSections: SectionBlueprint[] = [
   {
     id: 'quick_benefits',
     slot: 'section_1',
-    purpose: '3–6 bullets on why you're better.',
+    purpose: '3-6 bullets on why you\'re better.',
     titleTemplates: [
       'Why {{CITY}} Chooses {{BRAND_NAME}}',
       'What You Get with Our {{SERVICE_CATEGORY}}',

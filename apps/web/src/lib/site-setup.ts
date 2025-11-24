@@ -117,7 +117,7 @@ export async function generateSitePages(
     const page = await prisma.sitePage.create({
       data: {
         siteId,
-        pageType: mapPageTypeToBlueprint(planRow.pageType),
+        pageType: mapPageTypeToBlueprint(planRow.pageType) as any,
         slug: planRow.urlSlug,
         titleTag: planRow.pageTitle,
         h1: planRow.h1,
