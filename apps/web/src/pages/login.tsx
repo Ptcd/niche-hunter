@@ -6,6 +6,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
+import { supabase } from '../lib/supabase/client';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -42,6 +43,20 @@ export default function LoginPage() {
 
       if (!res.ok) {
         throw new Error(data.error || data.message || 'Login failed');
+      }
+
+      // Set session in client-side Supabase client so AuthGuard can see it
+      // This syncs localStorage with the cookie-based session
+      if (data.session) {
+        const { error: sessionError } = await supabase.auth.setSession({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        });
+        
+        if (sessionError) {
+          console.error('[login] Failed to set client session:', sessionError);
+          // Continue anyway - cookie is set, so server-side auth will work
+        }
       }
 
       // Redirect to dashboard after successful login
