@@ -206,7 +206,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
 
     // Generate Excel file buffer
-    const excelBuffer = await workbook.xlsx.writeBuffer();
+    const excelBuffer = (await workbook.xlsx.writeBuffer()) as Buffer;
 
     // Set response headers for file download
     const nicheName = batch.niche.name.replace(/[^a-z0-9-]/gi, '-');
@@ -215,7 +215,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const fileName = `${nicheName}-${cityName}-${stateName}.xlsx`;
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
-    res.setHeader('Content-Length', excelBuffer.length);
+    res.setHeader('Content-Length', excelBuffer.length.toString());
 
     // Send the file
     return res.send(excelBuffer);

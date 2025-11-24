@@ -232,13 +232,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
 
     // Generate buffer
-    const buffer = await workbook.xlsx.writeBuffer();
+    const buffer = (await workbook.xlsx.writeBuffer()) as Buffer;
 
     // Set response headers
     const filename = `${batch.niche.name.replace(/\s+/g, '-')}-keywords-${new Date().toISOString().split('T')[0]}.xlsx`;
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.setHeader('Content-Length', buffer.length);
+    res.setHeader('Content-Length', buffer.length.toString());
 
     return res.send(buffer);
   } catch (error: any) {
