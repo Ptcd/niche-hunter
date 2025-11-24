@@ -6,9 +6,9 @@
 
 import { prisma } from '@niche-hunter/db';
 import { PageStatus, SiteStatus } from '@prisma/client';
-import { publishPages, WPPublishError } from '../../../lib/wpFactoryClient';
-import { buildBrandSpec } from '../../../lib/brandBuilder';
-import { mapPageToSpec } from '../../../lib/pageMapper';
+import { publishPages, WPPublishError } from '../../lib/wpFactoryClient';
+import { buildBrandSpec } from '../../lib/brandBuilder';
+import { mapPageToSpec } from '../../lib/pageMapper';
 
 export interface PublishResult {
   pageId: string;

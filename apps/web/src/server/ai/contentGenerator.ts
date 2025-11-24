@@ -8,7 +8,7 @@
 import OpenAI from 'openai';
 import { prisma } from '@niche-hunter/db';
 import { PageType, PageStatus } from '@prisma/client';
-import { buildBrandSpec } from '../../../lib/brandBuilder';
+import { buildBrandSpec } from '../../lib/brandBuilder';
 import { buildPageHtml, Section } from './htmlTemplates';
 import { generatePageStrategy, PageSpec } from './pageStrategy';
 
