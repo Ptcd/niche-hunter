@@ -4,11 +4,17 @@
  * Email/password login using Supabase Auth.
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 
 export default function LoginPage() {
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
+
+  // Ensure this only runs on client
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -40,6 +46,11 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+
+  // Don't render until mounted (prevents SSR issues)
+  if (!mounted) {
+    return null;
+  }
 
   return (
     <div style={{ maxWidth: '400px', margin: '4rem auto', padding: '2rem' }}>
