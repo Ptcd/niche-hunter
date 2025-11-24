@@ -269,7 +269,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Clean up orphaned NicheKeyword records (only those that were part of this batch)
     // Get all nicheKeywordIds that were in the batch
     const nicheKeywordIdsInBatch = new Set(
-      allKeywordsInBatch.map(kw => kw.nicheKeywordId)
+      allKeywords.map(kw => kw.nicheKeywordId)
     );
 
     // Find nicheKeywords that are no longer referenced by ANY KeywordV5000 (in any batch)
