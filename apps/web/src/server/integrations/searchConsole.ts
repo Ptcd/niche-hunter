@@ -156,7 +156,7 @@ export async function syncGSCMetrics(siteId: string): Promise<void> {
 /**
  * Sync GSC metrics for all sites with Search Console configured
  */
-export async function syncAllGSCMetrics(): Promise<void> {
+export async function syncAllGSCMetrics(): Promise<any[]> {
   const sites = await prisma.site.findMany({
     where: {
       searchConsolePropertyId: { not: null },

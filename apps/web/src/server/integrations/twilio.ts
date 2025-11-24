@@ -141,7 +141,7 @@ export async function syncCallMetrics(siteId: string): Promise<void> {
 /**
  * Sync call metrics for all sites with Twilio numbers
  */
-export async function syncAllCallMetrics(): Promise<void> {
+export async function syncAllCallMetrics(): Promise<any[]> {
   const sites = await prisma.site.findMany({
     where: {
       phoneSource: PhoneSource.TWILIO,

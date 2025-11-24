@@ -18,9 +18,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const results = {
-      calls: [] as any[],
-      gsc: [] as any[],
+    const results: {
+      calls: any[];
+      gsc: any[];
+      voipms?: any[];
+    } = {
+      calls: [],
+      gsc: [],
+      voipms: [],
     };
 
     // Sync Twilio calls
