@@ -504,13 +504,69 @@ function VoipmsPhoneModal({ siteId, onClose, onSuccess }: { siteId: string; onCl
   );
 }
 
+// Generate domain suggestions based on city, state, and niche
+function generateDomainSuggestions(city: string, state: string, niche: string): string[] {
+  // Normalize inputs: lowercase, remove spaces and special chars
+  const cleanCity = city.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const cleanState = state.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const cleanNiche = niche.toLowerCase().replace(/[^a-z0-9]/g, '');
+  
+  const suggestions: string[] = [];
+  
+  // Pattern 1: city + niche
+  suggestions.push(`${cleanCity}${cleanNiche}.com`);
+  
+  // Pattern 2: niche + city
+  suggestions.push(`${cleanNiche}${cleanCity}.com`);
+  
+  // Pattern 3: city + niche + pros
+  suggestions.push(`${cleanCity}${cleanNiche}pros.com`);
+  
+  // Pattern 4: niche + city + state
+  suggestions.push(`${cleanNiche}${cleanCity}${cleanState}.com`);
+  
+  // Pattern 5: city + state + niche
+  suggestions.push(`${cleanCity}${cleanState}${cleanNiche}.com`);
+  
+  // Pattern 6: niche + of + city
+  suggestions.push(`${cleanNiche}of${cleanCity}.com`);
+  
+  // Pattern 7: city + niche + service (if niche doesn't already contain it)
+  if (!cleanNiche.includes('service')) {
+    suggestions.push(`${cleanCity}${cleanNiche}service.com`);
+  }
+  
+  // Pattern 8: best + city + niche
+  suggestions.push(`best${cleanCity}${cleanNiche}.com`);
+  
+  // Remove duplicates and return
+  return [...new Set(suggestions)];
+}
+
 // Domain Registration Modal Component
-function DomainModal({ siteId, onClose, onSuccess }: { siteId: string; onClose: () => void; onSuccess: () => void }) {
+function DomainModal({ 
+  siteId, 
+  city, 
+  state, 
+  niche, 
+  onClose, 
+  onSuccess 
+}: { 
+  siteId: string; 
+  city: string;
+  state: string;
+  niche: string;
+  onClose: () => void; 
+  onSuccess: () => void;
+}) {
   const [domain, setDomain] = useState('');
   const [availability, setAvailability] = useState<'unknown' | 'available' | 'taken' | 'error'>('unknown');
   const [checking, setChecking] = useState(false);
   const [registering, setRegistering] = useState(false);
   const [error, setError] = useState('');
+  const [suggestions] = useState<string[]>(() => generateDomainSuggestions(city, state, niche));
+  const [suggestionAvailability, setSuggestionAvailability] = useState<Record<string, 'unknown' | 'available' | 'taken' | 'error' | 'checking'>>({});
+  const [checkingAll, setCheckingAll] = useState(false);
 
   const handleCheck = async () => {
     if (!domain.trim()) {
@@ -545,6 +601,48 @@ function DomainModal({ siteId, onClose, onSuccess }: { siteId: string; onClose: 
       setAvailability('error');
     } finally {
       setChecking(false);
+    }
+  };
+
+  const handleCheckSuggestion = async (suggestion: string) => {
+    setSuggestionAvailability(prev => ({ ...prev, [suggestion]: 'checking' }));
+    try {
+      const res = await fetch('/api/domain/check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ domain: suggestion }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setSuggestionAvailability(prev => ({ 
+          ...prev, 
+          [suggestion]: data.status === 'available' ? 'available' : data.status === 'taken' ? 'taken' : 'error'
+        }));
+      } else {
+        setSuggestionAvailability(prev => ({ ...prev, [suggestion]: 'error' }));
+      }
+    } catch (error) {
+      console.error('Error checking suggestion:', error);
+      setSuggestionAvailability(prev => ({ ...prev, [suggestion]: 'error' }));
+    }
+  };
+
+  const handleCheckAll = async () => {
+    setCheckingAll(true);
+    // Check up to 5 suggestions at once
+    const toCheck = suggestions.slice(0, 5);
+    const promises = toCheck.map(suggestion => handleCheckSuggestion(suggestion));
+    await Promise.all(promises);
+    setCheckingAll(false);
+  };
+
+  const handleSelectSuggestion = (suggestion: string) => {
+    setDomain(suggestion);
+    setAvailability('unknown');
+    // If we already checked this suggestion, use that result
+    if (suggestionAvailability[suggestion] && suggestionAvailability[suggestion] !== 'unknown' && suggestionAvailability[suggestion] !== 'checking') {
+      setAvailability(suggestionAvailability[suggestion] as 'available' | 'taken' | 'error');
     }
   };
 
@@ -599,6 +697,91 @@ function DomainModal({ siteId, onClose, onSuccess }: { siteId: string; onClose: 
         width: '90%'
       }}>
         <h2 style={{ marginTop: 0 }}>Domain Registration</h2>
+        
+        {/* Suggested Domains Section */}
+        <div style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: '#f9f9f9', borderRadius: '4px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+            <label style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>Suggested Domains</label>
+            <button
+              onClick={handleCheckAll}
+              disabled={checkingAll}
+              style={{
+                padding: '0.25rem 0.75rem',
+                fontSize: '0.75rem',
+                backgroundColor: checkingAll ? '#ccc' : '#0070f3',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: checkingAll ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {checkingAll ? 'Checking...' : 'Check All'}
+            </button>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+            {suggestions.slice(0, 6).map((suggestion) => {
+              const status = suggestionAvailability[suggestion] || 'unknown';
+              return (
+                <div
+                  key={suggestion}
+                  onClick={() => handleSelectSuggestion(suggestion)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    padding: '0.5rem 0.75rem',
+                    backgroundColor: status === 'available' ? '#d4edda' : status === 'taken' ? '#f8d7da' : '#fff',
+                    border: `1px solid ${status === 'available' ? '#c3e6cb' : status === 'taken' ? '#f5c6cb' : '#ddd'}`,
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '0.875rem',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (status !== 'checking') {
+                      e.currentTarget.style.backgroundColor = status === 'available' ? '#c3e6cb' : status === 'taken' ? '#f5c6cb' : '#f0f0f0';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = status === 'available' ? '#d4edda' : status === 'taken' ? '#f8d7da' : '#fff';
+                  }}
+                >
+                  <span style={{ color: status === 'available' ? '#155724' : status === 'taken' ? '#721c24' : '#333' }}>
+                    {suggestion}
+                  </span>
+                  {status === 'checking' && (
+                    <span style={{ fontSize: '0.75rem', color: '#666' }}>⏳</span>
+                  )}
+                  {status === 'available' && (
+                    <span style={{ fontSize: '0.75rem', color: '#155724' }}>✓</span>
+                  )}
+                  {status === 'taken' && (
+                    <span style={{ fontSize: '0.75rem', color: '#721c24' }}>✗</span>
+                  )}
+                  {status === 'unknown' && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCheckSuggestion(suggestion);
+                      }}
+                      style={{
+                        padding: '0.125rem 0.5rem',
+                        fontSize: '0.7rem',
+                        backgroundColor: '#6c757d',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '3px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Check
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
         
         <div style={{ marginBottom: '1rem' }}>
           <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
@@ -1279,7 +1462,16 @@ export default function SiteFactoryDetailPage() {
       </div>
 
       {/* Modals */}
-      {showDomainModal && <DomainModal siteId={siteId as string} onClose={() => setShowDomainModal(false)} onSuccess={fetchSite} />}
+      {showDomainModal && site && (
+        <DomainModal 
+          siteId={siteId as string} 
+          city={site.city}
+          state={site.state}
+          niche={site.niche.slug}
+          onClose={() => setShowDomainModal(false)} 
+          onSuccess={fetchSite} 
+        />
+      )}
 
       {/* Manual Phone Modal */}
       {showManualPhoneModal && <ManualPhoneModal siteId={siteId as string} onClose={() => setShowManualPhoneModal(false)} onSuccess={fetchSite} />}
