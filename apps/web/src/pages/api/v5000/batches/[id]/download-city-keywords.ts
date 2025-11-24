@@ -206,7 +206,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
 
     // Generate Excel file buffer
-    const excelBuffer = (await workbook.xlsx.writeBuffer()) as Buffer;
+    const excelBuffer = (await workbook.xlsx.writeBuffer()) as unknown as Buffer;
 
     // Set response headers for file download
     const nicheName = batch.niche.name.replace(/[^a-z0-9-]/gi, '-');

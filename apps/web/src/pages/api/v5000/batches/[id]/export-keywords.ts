@@ -232,7 +232,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
 
     // Generate buffer
-    const buffer = (await workbook.xlsx.writeBuffer()) as Buffer;
+    const buffer = (await workbook.xlsx.writeBuffer()) as unknown as Buffer;
 
     // Set response headers
     const filename = `${batch.niche.name.replace(/\s+/g, '-')}-keywords-${new Date().toISOString().split('T')[0]}.xlsx`;
