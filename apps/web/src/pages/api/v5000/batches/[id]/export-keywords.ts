@@ -135,7 +135,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           let cityInfo = '';
           let avgVolume = nk.nationalVolume || 0;
           let avgDifficulty = nk.nationalKd || null;
-          let avgCpc = null;
+          let avgCpc: number | null = null;
 
           if (isLocal && nk.keywords.length > 0) {
             const cities = Array.from(new Set(nk.keywords.map(k => `${k.city.city}, ${k.city.state}`)));
