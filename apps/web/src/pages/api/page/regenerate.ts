@@ -90,7 +90,7 @@ ${styleGuidelines}
 
 ${page.notesForGpt ? `\nAdditional instructions:\n${page.notesForGpt}\n` : ""}
 
-Generate ${page.pageType === "home" ? "1200-1500" : "800-1200"} words of HTML content.
+Generate ${page.pageType === "HOME" ? "1200-1500" : "800-1200"} words of HTML content.
 Include the focus keyword in the H1 and first paragraph.
 Use {{URL_CONTACT}} token for contact page links.
 Include phone links with tel:${brand.phoneClean}.
@@ -123,7 +123,7 @@ Output ONLY the HTML content, no JSON, no markdown, no backticks.
       where: { id: pageId },
       data: {
         htmlDraft: htmlContent,
-        status: "draft",
+        status: "DRAFT",
         // Keep htmlEdited intact
       },
     });

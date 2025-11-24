@@ -501,7 +501,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         topSeedKeyword
       );
       
-      const allSerpKeywords = [...serpKeywords.map(k => k.keyword), ...competitorKeywords];
+      const allSerpKeywords = [...serpKeywords.map((k: any) => k.keyword), ...competitorKeywords];
       const uniqueSerp = Array.from(new Set(allSerpKeywords));
       console.log(`   [METHOD 3] Found ${uniqueSerp.length} keywords from SERP`);
       

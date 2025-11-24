@@ -7,4 +7,18 @@ export * from './dataforseo-labs';
 export * from './dataforseo-serp';
 // Export cancellation functions
 export { setGlobalCancellation, isGloballyCancelled } from './searchatlas';
+// Export keyword discovery functions
+export { 
+  getRelatedKeywordsFromSERP,
+  generateKeywordVariations,
+  getGoogleAutocompleteSuggestions,
+  extractCompetitorKeywords,
+  generateNicheTemplates
+} from './keywords-everywhere-api';
+// Export validator
+export { validateBroadKeywords } from './broad-keyword-validator';
+// Export searchatlas API functions
+export { shouldUseSearchAtlasAPI } from './searchatlas-api';
+// Export competitor functions
+export { enhanceCompetitorInfo, calculateCompetitionStrength } from './serp';
 

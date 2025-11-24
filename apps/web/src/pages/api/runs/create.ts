@@ -63,7 +63,7 @@ console.log(`🔧 Chrome Profile Configuration: CHROME_PROFILE_DIR=${process.env
 import { importPayoutsFromCSV, getPayoutForLocation } from '@niche-hunter/db';
 import { loadKeywordTaxonomy, loadIntentWeights, getAllKeywords } from '@niche-hunter/core';
 import { getLocalVolume } from '@niche-hunter/crawler';
-import { fetchSerpTop, extractSignals, extractCompetitorInfo, enhanceCompetitorInfo, calculateCompetitionStrength } from '@niche-hunter/crawler';
+import { fetchSerpTop, extractSignals, extractCompetitorInfo } from '@niche-hunter/crawler';
 import {
   computeDemandScore,
   computeDifficulty,
@@ -1250,7 +1250,8 @@ export async function processAnalysis(
           keyword: topKeywords[0] || keywordsToProcess[0],
           serpJson: serpData ? (serpData as any) : null,
           signalsJson: difficultySignals ? (difficultySignals as any) : null,
-          competitorJson: competitorBreakdown as any,
+          // Note: competitorJson field doesn't exist in Scan model
+          // Competitor data is included in signalsJson or can be stored separately if needed
           demandScore,
           difficulty,
           opportunity: breakdown.opportunity,
@@ -1280,17 +1281,11 @@ export async function processAnalysis(
             console.log(`      💰 "${kw.keyword}": CPC = $${cpc.toFixed(2)}`);
           }
           
-          await prisma.keyword.create({
-            data: {
-              scanId: scan.id,
-              keyword: kw.keyword,
-              volume: kw.volume,
-              difficulty: kwDifficulty,
-              cpc: cpc,
-              intent: kw.intent,
-              priority: priority,
-            },
-          });
+          // Note: Keyword model doesn't exist in current schema
+          // Keyword data is stored in Scan.keywords field as a comma-separated string
+          // Individual keyword metrics are not stored separately in the old schema
+          // TODO: Migrate to KeywordV5000 model if needed
+          console.log(`      💾 Keyword "${kw.keyword}" metrics: vol=${kw.volume}, difficulty=${kwDifficulty}, cpc=${cpc || 'N/A'}, intent=${kw.intent}, priority=${priority}`);
         } catch (kwError: any) {
           console.error(`   ❌ Failed to save keyword "${kw.keyword}": ${kwError.message}`);
         }

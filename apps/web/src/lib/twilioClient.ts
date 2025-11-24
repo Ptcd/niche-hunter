@@ -38,7 +38,7 @@ export async function searchPhoneNumbers(areaCode: string): Promise<PhoneNumber[
         limit: 20,
       });
 
-    return availableNumbers.map((number) => ({
+    return availableNumbers.map((number: any) => ({
       phoneNumber: number.phoneNumber || "",
       friendlyName: number.friendlyName || number.phoneNumber || "",
     }));

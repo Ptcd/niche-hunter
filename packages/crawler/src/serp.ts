@@ -604,3 +604,66 @@ export function extractSignals(
     avgTitleContainsCity,
   };
 }
+
+/**
+ * Enhance competitor information with additional metadata
+ */
+export function enhanceCompetitorInfo(competitors: CompetitorInfo[]): CompetitorInfo[] {
+  return competitors.map(competitor => {
+    // Add flags based on competitor type
+    const isAggregator = competitor.type === 'aggregator';
+    const isDirectory = competitor.type === 'directory';
+    const isLeadGenSite = competitor.type === 'lead-gen';
+    const isLocalBusiness = competitor.type === 'local-business';
+    
+    // Estimate domain authority (simplified - would need actual DA API in production)
+    const estimatedDA = isAggregator ? 80 : isDirectory ? 70 : isLocalBusiness ? 50 : 40;
+    
+    return {
+      ...competitor,
+      isAggregator,
+      isDirectory,
+      isLeadGenSite,
+      isLocalBusiness,
+      estimatedDA,
+    } as any;
+  });
+}
+
+/**
+ * Calculate competition strength score (0-10)
+ */
+export function calculateCompetitionStrength(competitors: CompetitorInfo[]): number {
+  if (competitors.length === 0) return 0;
+  
+  let strength = 0;
+  
+  for (const competitor of competitors) {
+    // Aggregators are strongest competitors
+    if ((competitor as any).isAggregator) {
+      strength += 2;
+    } else if ((competitor as any).isDirectory) {
+      strength += 1.5;
+    } else if ((competitor as any).isLeadGenSite) {
+      strength += 1;
+    } else if ((competitor as any).isLocalBusiness) {
+      strength += 0.5;
+    }
+    
+    // Higher domain authority = stronger competitor
+    const da = (competitor as any).estimatedDA || 50;
+    strength += (da / 100) * 0.5;
+    
+    // Better content quality = stronger competitor
+    const quality = competitor.contentQuality || 'medium';
+    if (quality === 'high') {
+      strength += 0.5;
+    } else if (quality === 'medium') {
+      strength += 0.25;
+    }
+  }
+  
+  // Normalize to 0-10 scale
+  const normalized = Math.min(10, strength / competitors.length * 2);
+  return Math.round(normalized * 10) / 10;
+}
