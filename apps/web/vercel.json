@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "buildCommand": "npm run build:web",
-  "devCommand": "npm run dev --workspace=apps/web",
-  "installCommand": "npm install",
+  "buildCommand": "bash build.sh",
+  "devCommand": "npm run dev",
+  "installCommand": "cd ../.. && npm install",
   "framework": "nextjs",
-  "outputDirectory": "apps/web/.next"
+  "outputDirectory": ".next"
 }
