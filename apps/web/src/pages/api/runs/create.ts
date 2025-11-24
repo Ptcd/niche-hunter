@@ -1241,6 +1241,8 @@ export async function processAnalysis(
       };
 
       // Store scan with keyword metrics
+      // Note: timeToRank and competitionStrength fields don't exist in Scan model
+      // These values can be stored in signalsJson if needed for future reference
       const scan = await prisma.scan.create({
         data: {
           runId,
@@ -1249,17 +1251,20 @@ export async function processAnalysis(
           zip: loc.zip ? loc.zip.trim() : undefined,
           keyword: topKeywords[0] || keywordsToProcess[0],
           serpJson: serpData ? (serpData as any) : null,
-          signalsJson: difficultySignals ? (difficultySignals as any) : null,
-          // Note: competitorJson field doesn't exist in Scan model
-          // Competitor data is included in signalsJson or can be stored separately if needed
+          signalsJson: difficultySignals ? {
+            ...(difficultySignals as any),
+            timeToRank: timeToRank || null,
+            competitionStrength: competitionStrength !== null && competitionStrength !== undefined ? competitionStrength : null,
+          } : {
+            timeToRank: timeToRank || null,
+            competitionStrength: competitionStrength !== null && competitionStrength !== undefined ? competitionStrength : null,
+          },
           demandScore,
           difficulty,
           opportunity: breakdown.opportunity,
           profitEst,
           classification: breakdown.classification,
           keywords: topKeywords.slice(0, 5).join(', '),
-          timeToRank: timeToRank || null, // Don't mask failures with defaults
-          competitionStrength: competitionStrength !== null && competitionStrength !== undefined ? competitionStrength : null, // Don't mask failures
         },
       });
       
