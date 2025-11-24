@@ -46,12 +46,15 @@ export function createRouteHandlerClient(req: NextApiRequest, res: NextApiRespon
   });
 
   // Set session if we have one from cookies
+  // Note: We can't await this in the client creation, but getSession() should work
+  // with the Authorization header we set above
   if (initialSession?.access_token) {
+    // Set session asynchronously (don't await to avoid blocking)
     supabase.auth.setSession({
       access_token: initialSession.access_token,
       refresh_token: initialSession.refresh_token,
-    }).catch(() => {
-      // Session might be expired, ignore
+    }).catch((err) => {
+      console.warn('[createRouteHandlerClient] Failed to set session:', err?.message);
     });
   }
 

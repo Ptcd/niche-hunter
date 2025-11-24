@@ -41,14 +41,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const projectRef = process.env.NEXT_PUBLIC_SUPABASE_URL?.match(/https:\/\/([^.]+)\.supabase\.co/)?.[1] || 'fpwayqwhdendrgtottwj';
     const cookieName = `sb-${projectRef}-auth-token`;
     
-    // Create session object for cookie
+    // Create minimal session object for cookie (avoid cookie size limits)
     const sessionData = {
       access_token: data.session.access_token,
       refresh_token: data.session.refresh_token,
       expires_at: data.session.expires_at,
       expires_in: data.session.expires_in,
       token_type: data.session.token_type,
-      user: data.session.user,
+      user: {
+        id: data.session.user.id,
+        email: data.session.user.email,
+      },
     };
 
     // URL encode the JSON string to avoid issues with special characters
@@ -56,6 +59,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const maxAge = data.session.expires_in || 3600;
     
     // Set cookie with proper attributes
+    // Note: Cookies have a 4KB limit, so we store minimal data
     res.setHeader('Set-Cookie', [
       `${cookieName}=${cookieValue}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`,
     ]);
@@ -67,7 +71,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   } catch (error: any) {
     console.error('[login] Error:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    console.error('[login] Error stack:', error?.stack);
+    return res.status(500).json({ 
+      error: 'Internal server error',
+      message: error?.message || 'Unknown error',
+    });
   }
 }
 
