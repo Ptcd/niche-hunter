@@ -60,9 +60,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     
     // Set cookie with proper attributes
     // Note: Cookies have a 4KB limit, so we store minimal data
-    res.setHeader('Set-Cookie', [
-      `${cookieName}=${cookieValue}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`,
-    ]);
+    // Use SameSite=None for cross-site requests if needed, but Lax should work for same-domain
+    const cookieOptions = [
+      `${cookieName}=${cookieValue}`,
+      'Path=/',
+      'HttpOnly',
+      'Secure', // Only send over HTTPS
+      'SameSite=Lax', // CSRF protection while allowing same-site navigation
+      `Max-Age=${maxAge}`,
+    ].join('; ');
+    
+    res.setHeader('Set-Cookie', cookieOptions);
 
     return res.status(200).json({
       ok: true,

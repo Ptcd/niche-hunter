@@ -9,16 +9,16 @@ import { useRouter } from 'next/router';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [mounted, setMounted] = useState(false);
-
-  // Ensure this only runs on client
-  useEffect(() => {
-    setMounted(true);
-  }, []);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  // Ensure this only runs on client (prevents hydration issues)
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,27 +30,28 @@ export default function LoginPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
+        credentials: 'include', // Ensure cookies are sent/received
       });
 
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Login failed');
+      let data;
+      try {
+        data = await res.json();
+      } catch (parseError) {
+        throw new Error('Invalid response from server');
       }
 
-      // Redirect to dashboard
-      router.push('/v5000');
+      if (!res.ok) {
+        throw new Error(data.error || data.message || 'Login failed');
+      }
+
+      // Redirect to dashboard after successful login
+      // Use window.location for a full page reload to ensure cookies are set
+      window.location.href = '/v5000';
     } catch (err: any) {
-      setError(err.message || 'Login failed');
-    } finally {
+      setError(err.message || 'Login failed. Please try again.');
       setLoading(false);
     }
   };
-
-  // Don't render until mounted (prevents SSR issues)
-  if (!mounted) {
-    return null;
-  }
 
   return (
     <div style={{ maxWidth: '400px', margin: '4rem auto', padding: '2rem' }}>
@@ -80,6 +81,7 @@ export default function LoginPage() {
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
             required
             style={{
               width: '100%',
@@ -98,6 +100,7 @@ export default function LoginPage() {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            autoComplete="current-password"
             required
             style={{
               width: '100%',
