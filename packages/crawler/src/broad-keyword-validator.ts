@@ -11,7 +11,6 @@
  * - Future runs for the same niche reuse cached data (0 API calls)
  */
 
-import { prisma } from '@niche-hunter/db';
 import { getVolumeFromKeywordsEverywhereAPI, getKeywordsEverywhereAPIKey, shouldUseKeywordsEverywhereAPI, getRelatedKeywordsFromAPI } from './keywords-everywhere-api';
 
 export interface ValidatedKeyword {
@@ -37,22 +36,17 @@ export interface ValidationResult {
 }
 
 /**
- * Get minimum volume threshold from settings or use default
+ * Get minimum volume threshold from environment variable or use default
+ * Note: Setting model doesn't exist in schema, using env var fallback
  */
 async function getMinimumVolumeThreshold(): Promise<number> {
-  try {
-    const setting = await prisma.setting.findUnique({
-      where: { key: 'MINIMUM_BROAD_VOLUME' },
-    });
-    
-    if (setting && setting.value) {
-      const threshold = parseInt(setting.value, 10);
-      if (!isNaN(threshold) && threshold > 0) {
-        return threshold;
-      }
+  // Check environment variable first
+  const envThreshold = process.env.MINIMUM_BROAD_VOLUME;
+  if (envThreshold) {
+    const threshold = parseInt(envThreshold, 10);
+    if (!isNaN(threshold) && threshold > 0) {
+      return threshold;
     }
-  } catch (error) {
-    // If setting doesn't exist or error, use default
   }
   
   // Default: 1,000 searches/month
@@ -125,40 +119,10 @@ export async function validateBroadKeywords(
   }
   
   // Process each keyword
+  // Note: broadKeywordVolume model doesn't exist in schema, so caching is disabled
+  // All keywords will be fetched from API each time
   for (const keyword of keywords) {
     try {
-      // Check cache first
-      const cached = await prisma.broadKeywordVolume.findUnique({
-        where: {
-          niche_keyword: {
-            niche,
-            keyword,
-          },
-        },
-      });
-      
-      if (cached) {
-        // Use cached data (no expiration - broad volumes are stable)
-        fromCache++;
-        console.log(`   ✅ [${keyword}] Cached: ${cached.volume.toLocaleString()}/month`);
-        
-        if (cached.volume >= minimumVolume) {
-          validated.push({
-            keyword,
-            volume: cached.volume,
-            competition: cached.competition || undefined,
-            cpc: cached.cpc || undefined,
-          });
-        } else {
-          rejected.push({
-            keyword,
-            volume: cached.volume,
-            reason: `Volume ${cached.volume} below threshold ${minimumVolume}`,
-          });
-        }
-        continue;
-      }
-      
       // Not in cache - fetch from API (no location specified = national/broad)
       console.log(`   📡 [${keyword}] Fetching broad volume from API...`);
       fromAPI++;
@@ -175,29 +139,8 @@ export async function validateBroadKeywords(
         
         const volume = result.volume || 0;
         
-        // Cache the result (even if volume is 0, so we don't query again)
-        await prisma.broadKeywordVolume.upsert({
-          where: {
-            niche_keyword: {
-              niche,
-              keyword,
-            },
-          },
-          create: {
-            niche,
-            keyword,
-            volume,
-            competition: result.competition || null,
-            cpc: result.cpc ? `${result.cpc.currency}${result.cpc.value}` : null,
-            source: 'keywords-everywhere-api',
-          },
-          update: {
-            volume,
-            competition: result.competition || null,
-            cpc: result.cpc ? `${result.cpc.currency}${result.cpc.value}` : null,
-            capturedAt: new Date(),
-          },
-        });
+        // Note: broadKeywordVolume model doesn't exist, so we can't cache
+        // This means we'll fetch from API every time, but it ensures functionality
         
         console.log(`   ${volume >= minimumVolume ? '✅' : '❌'} [${keyword}] API: ${volume.toLocaleString()}/month`);
         
@@ -270,27 +213,8 @@ export async function validateBroadKeywords(
           
           // Check if meets minimum volume threshold
           if (related.volume >= minimumVolume) {
-            // Cache the discovered keyword
-            await prisma.broadKeywordVolume.upsert({
-              where: {
-                niche_keyword: {
-                  niche,
-                  keyword: related.keyword,
-                },
-              },
-              create: {
-                niche,
-                keyword: related.keyword,
-                volume: related.volume,
-                competition: related.competition || null,
-                source: 'keywords-everywhere-api',
-              },
-              update: {
-                volume: related.volume,
-                competition: related.competition || null,
-                capturedAt: new Date(),
-              },
-            });
+            // Note: broadKeywordVolume model doesn't exist, so we can't cache
+            // Just add to discovered list
             
             discovered.push({
               keyword: related.keyword,
@@ -361,22 +285,13 @@ export async function validateBroadKeywords(
 /**
  * Get validated keywords for a niche (from cache only, no API calls)
  * Useful for checking what keywords were previously validated
+ * Note: broadKeywordVolume model doesn't exist, so this returns empty array
  */
 export async function getValidatedKeywords(niche: string): Promise<ValidatedKeyword[]> {
-  const cached = await prisma.broadKeywordVolume.findMany({
-    where: { niche },
-    orderBy: { volume: 'desc' },
-  });
-  
-  const minimumVolume = await getMinimumVolumeThreshold();
-  
-  return cached
-    .filter(c => c.volume >= minimumVolume)
-    .map(c => ({
-      keyword: c.keyword,
-      volume: c.volume,
-      competition: c.competition || undefined,
-      cpc: c.cpc || undefined,
-    }));
+  // Note: broadKeywordVolume model doesn't exist in schema
+  // This function would need the model to be added to work properly
+  // For now, return empty array to avoid errors
+  console.warn(`[getValidatedKeywords] broadKeywordVolume model doesn't exist - returning empty array`);
+  return [];
 }
 

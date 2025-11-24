@@ -63,7 +63,7 @@ console.log(`🔧 Chrome Profile Configuration: CHROME_PROFILE_DIR=${process.env
 import { importPayoutsFromCSV, getPayoutForLocation } from '@niche-hunter/db';
 import { loadKeywordTaxonomy, loadIntentWeights, getAllKeywords } from '@niche-hunter/core';
 import { getLocalVolume } from '@niche-hunter/crawler';
-import { fetchSerpTop, extractSignals, extractCompetitorInfo } from '@niche-hunter/crawler';
+import { fetchSerpTop, extractSignals, extractCompetitorInfo, enhanceCompetitorInfo, calculateCompetitionStrength } from '@niche-hunter/crawler';
 import {
   computeDemandScore,
   computeDifficulty,
