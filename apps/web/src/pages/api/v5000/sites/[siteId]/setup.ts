@@ -42,6 +42,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       where: { id: siteId },
       include: {
         batch: true,
+        niche: true,
       },
     });
 
