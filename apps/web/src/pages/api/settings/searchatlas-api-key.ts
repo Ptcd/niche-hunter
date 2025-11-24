@@ -9,12 +9,12 @@ export default async function handler(
 ) {
   if (req.method === 'GET') {
     try {
-      // Settings are stored in environment variables or a separate table
-      // For now, use environment variable as fallback
-      const setting = null; // TODO: Add Setting model to schema if needed
+      // Settings are stored in environment variables
+      // TODO: Add Setting model to schema if database storage is needed
+      const apiKey = process.env.SEARCHATLAS_API_KEY || null;
 
       return res.status(200).json({
-        apiKey: setting?.value || null,
+        apiKey,
       });
     } catch (error: any) {
       console.error('Error fetching API key:', error);

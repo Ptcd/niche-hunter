@@ -9,12 +9,10 @@ export default async function handler(
 ) {
   if (req.method === 'GET') {
     try {
-      // Settings are stored in environment variables or a separate table
-      // For now, use environment variable as fallback
-      const setting = null; // TODO: Add Setting model to schema if needed
-
-      // Default to 1000 if not set
-      const value = setting?.value ? parseInt(setting.value, 10) : 1000;
+      // Settings are stored in environment variables
+      // TODO: Add Setting model to schema if database storage is needed
+      const envThreshold = process.env.MINIMUM_BROAD_VOLUME;
+      const value = envThreshold ? parseInt(envThreshold, 10) : 1000;
 
       return res.status(200).json({
         threshold: isNaN(value) ? 1000 : value,
