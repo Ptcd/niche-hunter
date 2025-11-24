@@ -14,6 +14,8 @@
     "@niche-hunter/core": "*",
     "@niche-hunter/crawler": "*",
     "@niche-hunter/db": "*",
+    "@supabase/auth-helpers-nextjs": "^0.10.0",
+    "@supabase/supabase-js": "^2.84.0",
     "csv-parse": "^5.5.3",
     "dotenv": "^16.6.1",
     "exceljs": "^4.4.0",

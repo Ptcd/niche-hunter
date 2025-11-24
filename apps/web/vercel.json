@@ -4,5 +4,11 @@
   "devCommand": "npm run dev",
   "installCommand": "cd ../.. && npm install",
   "framework": "nextjs",
-  "outputDirectory": ".next"
+  "outputDirectory": "apps/web/.next",
+  "regions": ["iad1"],
+  "functions": {
+    "pages/api/**/*.ts": {
+      "maxDuration": 30
+    }
+  }
 }
