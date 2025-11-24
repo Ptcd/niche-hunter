@@ -101,10 +101,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         if (wpPageId) {
           // Update existing page
-          await updateWPPage(wpConfig, wpPageId, content, page.titleTag, page.slug);
+          await updateWPPage(wpConfig, String(wpPageId), content, page.titleTag, page.slug);
         } else {
           // Create new page
-          wpPageId = await createWPPage(wpConfig, page.slug, page.titleTag, content, 'publish');
+          const newWpPageId = await createWPPage(wpConfig, page.slug, page.titleTag, content, 'publish');
+          wpPageId = parseInt(newWpPageId, 10);
           
           // Save WP page ID
           await prisma.sitePage.update({
