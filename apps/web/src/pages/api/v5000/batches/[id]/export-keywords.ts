@@ -135,7 +135,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           let cityInfo = '';
           let avgVolume = nk.nationalVolume || 0;
           let avgDifficulty = nk.nationalKd || null;
-          let avgCpc: number | null = null;
+          let avgCpc: number | null = null as number | null;
 
           if (isLocal && nk.keywords.length > 0) {
             const cities = Array.from(new Set(nk.keywords.map(k => `${k.city.city}, ${k.city.state}`)));
@@ -163,8 +163,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           row.getCell(3).value = avgVolume;
           row.getCell(4).value = avgDifficulty !== null ? avgDifficulty : 'N/A';
           let cpcDisplay = 'N/A';
-          if (avgCpc !== null && typeof avgCpc === 'number') {
-            cpcDisplay = `$${avgCpc.toFixed(2)}`;
+          if (avgCpc !== null) {
+            cpcDisplay = `$${(avgCpc as number).toFixed(2)}`;
           }
           row.getCell(5).value = cpcDisplay;
           row.getCell(6).value = classification.suggestedPageType;
