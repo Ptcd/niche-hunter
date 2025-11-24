@@ -15,7 +15,7 @@ if (!WP_APP_URL || !WP_APP_USER || !WP_APP_PASS) {
   console.warn("[wpFactoryClient] Missing WP_* env vars; WordPress deploy will fail.");
 }
 
-function getAuthHeader(username?: string, password?: string) {
+function getAuthHeader(username?: string, password?: string): Record<string, string> {
   const user = username || WP_APP_USER;
   const pass = password || WP_APP_PASS;
   if (!user || !pass) return {};
@@ -91,11 +91,12 @@ export async function bootstrapSite(
   if (!baseUrl) throw new Error("WordPress URL not configured");
 
   return callWithRetry(async () => {
+    const authHeaders = getAuthHeader(wpUser, wpPass);
     const res = await fetch(`${baseUrl}/wp-json/nichehunter/v1/bootstrap-site`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...getAuthHeader(wpUser, wpPass),
+        ...authHeaders,
       },
       body: JSON.stringify({ brand }),
     });
@@ -132,11 +133,12 @@ export async function syncPages(
   if (!baseUrl) throw new Error("WordPress URL not configured");
 
   return callWithRetry(async () => {
+    const authHeaders = getAuthHeader(wpUser, wpPass);
     const res = await fetch(`${baseUrl}/wp-json/nichehunter/v1/batch-upsert`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...getAuthHeader(wpUser, wpPass),
+        ...authHeaders,
       },
       body: JSON.stringify({
         auth: {
@@ -184,11 +186,12 @@ export async function publishPages(
   wpPass: string
 ) {
   return callWithRetry(async () => {
+    const authHeaders = getAuthHeader(wpUser, wpPass);
     const res = await fetch(`${wpUrl}/wp-json/nichehunter/v1/batch-upsert`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...getAuthHeader(wpUser, wpPass),
+        ...authHeaders,
       },
       body: JSON.stringify({
         auth: {
