@@ -9,17 +9,21 @@
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '@niche-hunter/db';
+import { withAuth } from '../../../../../lib/auth/withAuth';
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest & { auth: any }, res: NextApiResponse) {
   const { siteId } = req.query;
 
   if (typeof siteId !== 'string') {
     return res.status(400).json({ error: 'Invalid site ID' });
   }
 
-  // Verify site exists
-  const site = await prisma.site.findUnique({
-    where: { id: siteId },
+  // Verify site exists and belongs to account
+  const site = await prisma.site.findFirst({
+    where: {
+      id: siteId,
+      accountId: req.auth.currentAccountId,
+    },
   });
 
   if (!site) {
@@ -110,4 +114,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   return res.status(405).json({ error: 'Method not allowed' });
 }
+
+export default withAuth(handler);
 

@@ -6,8 +6,9 @@
 
 import { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '@niche-hunter/db';
+import { withAuth } from '../../../../lib/auth/withAuth';
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest & { auth: any }, res: NextApiResponse) {
   const { siteId } = req.query;
 
   if (typeof siteId !== 'string') {
@@ -19,10 +20,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const site = await prisma.site.findUnique({
-      where: { id: siteId },
+    const site = await prisma.site.findFirst({
+      where: { 
+        id: siteId,
+        accountId: req.auth.currentAccountId, // Filter by account
+      },
       include: {
         niche: true,
+        promptProfile: true, // Add promptProfile for frontend
         pages: {
           include: {
             skeletons: {
@@ -67,4 +72,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 }
+
+export default withAuth(handler);
 

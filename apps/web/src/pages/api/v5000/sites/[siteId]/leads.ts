@@ -6,8 +6,9 @@
 
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { prisma } from '@niche-hunter/db';
+import { withAuth } from '../../../../../lib/auth/withAuth';
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+async function handler(req: NextApiRequest & { auth: any }, res: NextApiResponse) {
   const { siteId } = req.query;
 
   if (typeof siteId !== 'string') {
@@ -19,6 +20,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    // Verify site belongs to account
+    const site = await prisma.site.findFirst({
+      where: {
+        id: siteId,
+        accountId: req.auth.currentAccountId,
+      },
+      select: { id: true },
+    });
+
+    if (!site) {
+      return res.status(404).json({ error: 'Site not found' });
+    }
+
     const leads = await prisma.lead.findMany({
       where: { siteId },
       orderBy: { createdAt: 'desc' },
@@ -31,4 +45,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ error: error.message });
   }
 }
+
+export default withAuth(handler);
 
