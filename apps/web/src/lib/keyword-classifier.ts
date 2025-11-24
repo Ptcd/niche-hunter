@@ -183,8 +183,9 @@ export function classifyKeywordWithScope(keyword: string): KeywordClassification
     } else {
       suggestedPageType = 'service';
     }
-  } else if (lowerKeyword.split(/\s+/).length <= 2 && type !== 'informational') {
+  } else if (lowerKeyword.split(/\s+/).length <= 2) {
     // Short, high-intent keywords -> homepage or service
+    // (type is already narrowed to 'brand' | 'local' | 'other' at this point)
     suggestedPageType = scope === 'local' ? 'location' : 'homepage';
   }
   
