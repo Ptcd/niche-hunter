@@ -504,6 +504,218 @@ function VoipmsPhoneModal({ siteId, onClose, onSuccess }: { siteId: string; onCl
   );
 }
 
+// Domain Registration Modal Component
+function DomainModal({ siteId, onClose, onSuccess }: { siteId: string; onClose: () => void; onSuccess: () => void }) {
+  const [domain, setDomain] = useState('');
+  const [availability, setAvailability] = useState<'unknown' | 'available' | 'taken' | 'error'>('unknown');
+  const [checking, setChecking] = useState(false);
+  const [registering, setRegistering] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleCheck = async () => {
+    if (!domain.trim()) {
+      alert('Please enter a domain name');
+      return;
+    }
+
+    setChecking(true);
+    setError('');
+    setAvailability('unknown');
+    try {
+      const res = await fetch('/api/domain/check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ domain }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setAvailability(data.status === 'available' ? 'available' : data.status === 'taken' ? 'taken' : 'error');
+        if (data.status === 'error') {
+          setError('Failed to check domain availability');
+        }
+      } else {
+        const errorData = await res.json();
+        setError(errorData.error || 'Failed to check domain availability');
+        setAvailability('error');
+      }
+    } catch (error) {
+      console.error('Error checking domain:', error);
+      setError('Failed to check domain availability');
+      setAvailability('error');
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const handleRegister = async () => {
+    if (!domain.trim() || availability !== 'available') {
+      return;
+    }
+
+    setRegistering(true);
+    setError('');
+    try {
+      const res = await fetch('/api/domain/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ siteId, domain }),
+      });
+
+      if (res.ok) {
+        alert('Domain registered successfully!');
+        onSuccess();
+        onClose();
+      } else {
+        const errorData = await res.json();
+        setError(errorData.error || 'Failed to register domain');
+      }
+    } catch (error) {
+      console.error('Error registering domain:', error);
+      setError('Failed to register domain');
+    } finally {
+      setRegistering(false);
+    }
+  };
+
+  return (
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 1000
+    }}>
+      <div style={{
+        backgroundColor: 'white',
+        padding: '2rem',
+        borderRadius: '8px',
+        maxWidth: '500px',
+        width: '90%'
+      }}>
+        <h2 style={{ marginTop: 0 }}>Domain Registration</h2>
+        
+        <div style={{ marginBottom: '1rem' }}>
+          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+            Domain Name
+          </label>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <input
+              type="text"
+              value={domain}
+              onChange={(e) => {
+                setDomain(e.target.value);
+                setAvailability('unknown');
+                setError('');
+              }}
+              placeholder="example.com"
+              style={{ flex: 1, padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter') {
+                  handleCheck();
+                }
+              }}
+            />
+            <button
+              onClick={handleCheck}
+              disabled={checking || !domain.trim()}
+              style={{
+                padding: '0.5rem 1rem',
+                backgroundColor: checking || !domain.trim() ? '#ccc' : '#0070f3',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: checking || !domain.trim() ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {checking ? 'Checking...' : 'Check'}
+            </button>
+          </div>
+        </div>
+
+        {availability !== 'unknown' && (
+          <div style={{
+            marginBottom: '1rem',
+            padding: '1rem',
+            borderRadius: '4px',
+            backgroundColor: availability === 'available' ? '#d4edda' : availability === 'taken' ? '#f8d7da' : '#fff3cd',
+            color: availability === 'available' ? '#155724' : availability === 'taken' ? '#721c24' : '#856404',
+            border: `1px solid ${availability === 'available' ? '#c3e6cb' : availability === 'taken' ? '#f5c6cb' : '#ffeaa7'}`
+          }}>
+            {availability === 'available' && (
+              <div>
+                <strong>✓ Available</strong>
+                <div style={{ fontSize: '0.875rem', marginTop: '0.5rem' }}>
+                  This domain is available for registration.
+                </div>
+              </div>
+            )}
+            {availability === 'taken' && (
+              <div>
+                <strong>✗ Taken</strong>
+                <div style={{ fontSize: '0.875rem', marginTop: '0.5rem' }}>
+                  This domain is already registered.
+                </div>
+              </div>
+            )}
+            {availability === 'error' && (
+              <div>
+                <strong>⚠ Error</strong>
+                <div style={{ fontSize: '0.875rem', marginTop: '0.5rem' }}>
+                  Could not check domain availability. Please try again.
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {error && (
+          <div style={{
+            marginBottom: '1rem',
+            padding: '0.75rem',
+            borderRadius: '4px',
+            backgroundColor: '#f8d7da',
+            color: '#721c24',
+            fontSize: '0.875rem'
+          }}>
+            {error}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+          <button
+            onClick={onClose}
+            style={{ padding: '0.5rem 1rem', cursor: 'pointer', border: '1px solid #ddd', borderRadius: '4px', backgroundColor: 'white' }}
+          >
+            Close
+          </button>
+          {availability === 'available' && (
+            <button
+              onClick={handleRegister}
+              disabled={registering}
+              style={{
+                padding: '0.5rem 1rem',
+                backgroundColor: registering ? '#ccc' : '#28a745',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: registering ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {registering ? 'Registering...' : 'Register Domain'}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Ringba Phone Modal Component
 function RingbaPhoneModal({ siteId, onClose, onSuccess }: { siteId: string; onClose: () => void; onSuccess: () => void }) {
   const [areaCode, setAreaCode] = useState('');
@@ -678,8 +890,14 @@ interface SitePage {
   pageType: string;
   slug: string;
   titleTag: string;
+  h1: string | null;
   focusKeyword: string;
   status: string | null;
+  seoTitle: string | null;
+  seoDescription: string | null;
+  htmlDraft: string | null;
+  htmlEdited: string | null;
+  notesForGpt: string | null;
   wpPageId: number | null;
   wpPermalink: string | null;
   wpEditUrl: string | null;
@@ -1061,32 +1279,7 @@ export default function SiteFactoryDetailPage() {
       </div>
 
       {/* Modals */}
-      {showDomainModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000
-        }}>
-          <div style={{
-            backgroundColor: 'white',
-            padding: '2rem',
-            borderRadius: '8px',
-            maxWidth: '500px',
-            width: '90%'
-          }}>
-            <h2>Domain Registration</h2>
-            <p>Domain search and registration will be implemented here.</p>
-            <button onClick={() => setShowDomainModal(false)}>Close</button>
-          </div>
-        </div>
-      )}
+      {showDomainModal && <DomainModal siteId={siteId as string} onClose={() => setShowDomainModal(false)} onSuccess={fetchSite} />}
 
       {/* Manual Phone Modal */}
       {showManualPhoneModal && <ManualPhoneModal siteId={siteId as string} onClose={() => setShowManualPhoneModal(false)} onSuccess={fetchSite} />}
