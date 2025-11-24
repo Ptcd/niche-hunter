@@ -20,22 +20,31 @@ async function handler(req: NextApiRequest & { auth: any }, res: NextApiResponse
   }
 
   try {
+    // Validate auth context
+    if (!req.auth || !req.auth.currentAccountId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
     const site = await prisma.site.findFirst({
       where: { 
         id: siteId,
         accountId: req.auth.currentAccountId, // Filter by account
       },
       include: {
-        niche: true,
-        promptProfile: true, // Add promptProfile for frontend
-        pages: {
-          include: {
-            skeletons: {
-              orderBy: {
-                orderIndex: 'asc',
-              },
-            },
+        niche: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
           },
+        },
+        promptProfile: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        pages: {
           orderBy: {
             orderIndex: 'asc',
           },
@@ -50,11 +59,6 @@ async function handler(req: NextApiRequest & { auth: any }, res: NextApiResponse
             wpPermalink: true,
             wpEditUrl: true,
             latestPublishedAt: true,
-            skeletons: {
-              orderBy: {
-                orderIndex: 'asc',
-              },
-            },
           },
         },
       },
@@ -67,6 +71,7 @@ async function handler(req: NextApiRequest & { auth: any }, res: NextApiResponse
     return res.status(200).json(site);
   } catch (error: any) {
     console.error('Error fetching site:', error);
+    console.error('Error stack:', error?.stack);
     return res.status(500).json({
       error: error.message || 'Failed to fetch site',
     });
