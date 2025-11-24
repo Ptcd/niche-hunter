@@ -29,7 +29,10 @@ export default function PageEditor() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [useCustomHtml, setUseCustomHtml] = useState(false);
+  const [selectedModel, setSelectedModel] = useState('gpt-4o');
+  const [lastModelUsed, setLastModelUsed] = useState<string | null>(null);
   
   // Form state
   const [seoTitle, setSeoTitle] = useState('');
@@ -98,35 +101,47 @@ export default function PageEditor() {
     }
   };
 
-  const handleRegenerate = async () => {
-    if (!pageId || typeof pageId !== 'string') return;
-    if (!confirm('Regenerate this page with GPT? This will overwrite the draft content.')) {
+  const handleGenerate = async (isRegenerate: boolean = false) => {
+    if (!pageId || typeof pageId !== 'string' || !siteId || typeof siteId !== 'string') return;
+    
+    if (isRegenerate && !confirm('Regenerate this page with GPT? This will overwrite the draft content.')) {
       return;
     }
 
-    setRegenerating(true);
+    const isGenerating = isRegenerate ? false : true;
+    if (isRegenerate) {
+      setRegenerating(true);
+    } else {
+      setGenerating(true);
+    }
+
     try {
-      const res = await fetch('/api/page/regenerate', {
+      const res = await fetch(`/api/v5000/sites/${siteId}/pages/${pageId}/regenerate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pageId }),
+        body: JSON.stringify({ model: selectedModel }),
       });
 
       if (res.ok) {
         const result = await res.json();
         setHtmlEdited(''); // Clear edited version
         setUseCustomHtml(false);
+        setLastModelUsed(result.model || selectedModel);
         fetchPage();
-        alert('Page regenerated successfully!');
+        alert(`Page ${isRegenerate ? 'regenerated' : 'generated'} successfully using ${result.model || selectedModel}!`);
       } else {
         const error = await res.json();
-        alert(error.error || 'Failed to regenerate page');
+        alert(error.error || `Failed to ${isRegenerate ? 'regenerate' : 'generate'} page`);
       }
     } catch (error) {
-      console.error('Error regenerating page:', error);
-      alert('Failed to regenerate page');
+      console.error(`Error ${isRegenerate ? 'regenerating' : 'generating'} page:`, error);
+      alert(`Failed to ${isRegenerate ? 'regenerate' : 'generate'} page`);
     } finally {
-      setRegenerating(false);
+      if (isRegenerate) {
+        setRegenerating(false);
+      } else {
+        setGenerating(false);
+      }
     }
   };
 
@@ -240,13 +255,38 @@ export default function PageEditor() {
 
           <div style={{ marginBottom: '1rem' }}>
             <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-              Notes for GPT (used when regenerating)
+              GPT Model
+            </label>
+            <select
+              value={selectedModel}
+              onChange={(e) => setSelectedModel(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '0.5rem',
+                border: '1px solid #ddd',
+                borderRadius: '4px',
+              }}
+            >
+              <option value="gpt-4o">GPT-4o (Best quality, slower)</option>
+              <option value="gpt-4o-mini">GPT-4o-mini (Faster, cheaper)</option>
+              <option value="gpt-4-turbo">GPT-4 Turbo (Balanced)</option>
+            </select>
+            {lastModelUsed && (
+              <div style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: '#666' }}>
+                Last used: {lastModelUsed}
+              </div>
+            )}
+          </div>
+
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+              Notes for GPT (used when generating/regenerating)
             </label>
             <textarea
               value={notesForGpt}
               onChange={(e) => setNotesForGpt(e.target.value)}
               rows={4}
-              placeholder="Add specific instructions for GPT when regenerating this page..."
+              placeholder="Add specific instructions for GPT when generating this page..."
               style={{
                 width: '100%',
                 padding: '0.5rem',
@@ -288,7 +328,7 @@ export default function PageEditor() {
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
+          <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem', flexWrap: 'wrap' }}>
             <button
               onClick={handleSave}
               disabled={saving}
@@ -305,21 +345,41 @@ export default function PageEditor() {
               {saving ? 'Saving...' : 'Save Changes'}
             </button>
 
-            <button
-              onClick={handleRegenerate}
-              disabled={regenerating}
-              style={{
-                padding: '0.75rem 1.5rem',
-                backgroundColor: regenerating ? '#ccc' : '#ffc107',
-                color: 'black',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: regenerating ? 'not-allowed' : 'pointer',
-                fontSize: '1rem',
-              }}
-            >
-              {regenerating ? 'Regenerating...' : 'Regenerate with GPT'}
-            </button>
+            {!page.htmlDraft && (
+              <button
+                onClick={() => handleGenerate(false)}
+                disabled={generating}
+                style={{
+                  padding: '0.75rem 1.5rem',
+                  backgroundColor: generating ? '#ccc' : '#28a745',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: generating ? 'not-allowed' : 'pointer',
+                  fontSize: '1rem',
+                }}
+              >
+                {generating ? 'Generating...' : 'Generate Content'}
+              </button>
+            )}
+
+            {page.htmlDraft && (
+              <button
+                onClick={() => handleGenerate(true)}
+                disabled={regenerating}
+                style={{
+                  padding: '0.75rem 1.5rem',
+                  backgroundColor: regenerating ? '#ccc' : '#ffc107',
+                  color: 'black',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: regenerating ? 'not-allowed' : 'pointer',
+                  fontSize: '1rem',
+                }}
+              >
+                {regenerating ? 'Regenerating...' : 'Regenerate with GPT'}
+              </button>
+            )}
 
             <button
               onClick={handleApprove}

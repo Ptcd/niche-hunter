@@ -47,7 +47,7 @@ export interface GeneratedPage {
 /**
  * Generate content for a single page
  */
-export async function generatePageContent(pageId: string): Promise<GeneratedPage> {
+export async function generatePageContent(pageId: string, model: string = 'gpt-4o'): Promise<GeneratedPage> {
   const page = await prisma.sitePage.findUnique({
     where: { id: pageId },
     include: {
@@ -116,7 +116,7 @@ export async function generatePageContent(pageId: string): Promise<GeneratedPage
   if (page.skeletons.length > 0) {
     // Use existing skeletons
     for (const skeleton of page.skeletons) {
-      const sectionContent = await generateSectionContent(skeleton, context, page);
+      const sectionContent = await generateSectionContent(skeleton, context, page, model);
       sections.push({
         id: skeleton.sectionId,
         type: mapSectionType(skeleton.sectionId),
@@ -130,7 +130,7 @@ export async function generatePageContent(pageId: string): Promise<GeneratedPage
     }
   } else {
     // Fallback: generate default sections based on page type
-    sections.push(...await generateDefaultSections(page.pageType, context, page));
+    sections.push(...await generateDefaultSections(page.pageType, context, page, model));
   }
 
   // Build HTML
@@ -167,7 +167,8 @@ async function generateSectionContent(
     localHints: string[];
   },
   context: PageContext,
-  page: { focusKeyword: string; pageType: PageType }
+  page: { focusKeyword: string; pageType: PageType },
+  model: string = 'gpt-4o'
 ): Promise<string> {
   const systemPrompt = context.promptProfile?.systemPrompt || `
 You are an expert local SEO copywriter for home-service businesses.
@@ -217,7 +218,7 @@ Output ONLY the content text (no markdown, no code blocks, just the content).
 
   try {
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      model,
       temperature: 0.7,
       max_tokens: Math.ceil(skeleton.targetWordCount * 1.5), // Rough estimate
       messages: [
@@ -244,7 +245,8 @@ Output ONLY the content text (no markdown, no code blocks, just the content).
 async function generateDefaultSections(
   pageType: PageType,
   context: PageContext,
-  page: { focusKeyword: string; pageType: PageType }
+  page: { focusKeyword: string; pageType: PageType },
+  model: string = 'gpt-4o'
 ): Promise<Section[]> {
   const sections: Section[] = [];
 
@@ -348,7 +350,8 @@ async function generateDefaultSections(
             localHints: [`Mention ${context.city}, ${context.state}`],
           },
           context,
-          pageSpec
+          pageSpec,
+          model
         );
       } catch (error) {
         console.error(`Failed to generate content for section ${section.id}:`, error);

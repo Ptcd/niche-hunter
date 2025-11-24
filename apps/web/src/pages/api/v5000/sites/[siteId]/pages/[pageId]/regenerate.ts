@@ -38,8 +38,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: "Page does not belong to this site" });
     }
 
+    // Get model from request body, default to 'gpt-4o'
+    const { model = 'gpt-4o' } = req.body as { model?: string };
+
     // Generate new content
-    const generated = await generatePageContent(pageId);
+    const generated = await generatePageContent(pageId, model);
 
     // Update page with new content
     // Preserve humanNotes and htmlEdited
@@ -64,6 +67,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       html: generated.html,
       wordCount: generated.wordCount,
       sections: generated.sections,
+      model,
     });
   } catch (err: any) {
     console.error("[regenerate-page] error:", err);
