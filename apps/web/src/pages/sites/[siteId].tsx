@@ -527,7 +527,7 @@ function generateDomainSuggestions(city: string, state: string, keywords: string
   // Use keywords if available, otherwise fall back to niche
   const primaryTerms = cleanKeywords.length > 0 ? cleanKeywords : [cleanNiche];
   
-  // Generate 4 clean patterns per keyword
+  // Generate service-focused patterns per keyword
   for (const term of primaryTerms) {
     // Pattern 1: city + keyword
     suggestions.push(`${cleanCity}${term}.com`);
@@ -542,7 +542,20 @@ function generateDomainSuggestions(city: string, state: string, keywords: string
     suggestions.push(`${cleanCity}${term}pros.com`);
   }
   
-  // Remove duplicates and return (should be 6-8 total suggestions)
+  // Add company-sounding patterns (still include keyword)
+  if (cleanKeywords.length > 0) {
+    const topKeyword = cleanKeywords[0]; // Use top keyword for company patterns
+    // Pattern 5: city + keyword + co (company)
+    suggestions.push(`${cleanCity}${topKeyword}co.com`);
+    
+    // Pattern 6: keyword + pros + city
+    suggestions.push(`${topKeyword}pros${cleanCity}.com`);
+    
+    // Pattern 7: keyword + co + city
+    suggestions.push(`${topKeyword}co${cleanCity}.com`);
+  }
+  
+  // Remove duplicates and return (should be 10-12 total suggestions)
   return [...new Set(suggestions)];
 }
 

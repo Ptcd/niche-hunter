@@ -7,7 +7,7 @@
  */
 
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { createRouteHandlerClient } from '../../../lib/supabase/server';
+import { createRouteHandlerClient, setSessionCookie } from '../../../lib/supabase/server';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -21,7 +21,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const supabase = createRouteHandlerClient(req, res);
+    const supabase = await createRouteHandlerClient(req, res);
     
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
@@ -36,41 +36,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(401).json({ error: 'No session created' });
     }
 
-    // Set session cookies manually using Supabase's expected format
-    // Supabase expects cookies in format: sb-<project-ref>-auth-token
-    const projectRef = process.env.NEXT_PUBLIC_SUPABASE_URL?.match(/https:\/\/([^.]+)\.supabase\.co/)?.[1] || 'fpwayqwhdendrgtottwj';
-    const cookieName = `sb-${projectRef}-auth-token`;
-    
-    // Create minimal session object for cookie (avoid cookie size limits)
-    const sessionData = {
-      access_token: data.session.access_token,
-      refresh_token: data.session.refresh_token,
-      expires_at: data.session.expires_at,
-      expires_in: data.session.expires_in,
-      token_type: data.session.token_type,
-      user: {
-        id: data.session.user.id,
-        email: data.session.user.email,
-      },
-    };
-
-    // URL encode the JSON string to avoid issues with special characters
-    const cookieValue = encodeURIComponent(JSON.stringify(sessionData));
-    const maxAge = data.session.expires_in || 3600;
-    
-    // Set cookie with proper attributes
-    // Note: Cookies have a 4KB limit, so we store minimal data
-    // Use SameSite=None for cross-site requests if needed, but Lax should work for same-domain
-    const cookieOptions = [
-      `${cookieName}=${cookieValue}`,
-      'Path=/',
-      'HttpOnly',
-      'Secure', // Only send over HTTPS
-      'SameSite=Lax', // CSRF protection while allowing same-site navigation
-      `Max-Age=${maxAge}`,
-    ].join('; ');
-    
-    res.setHeader('Set-Cookie', cookieOptions);
+    // Set session cookie using helper function (30-day lifetime)
+    setSessionCookie(res, data.session);
 
     return res.status(200).json({
       ok: true,

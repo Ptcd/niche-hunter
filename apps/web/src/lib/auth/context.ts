@@ -29,7 +29,7 @@ export async function getAuthContext(
   res: NextApiResponse
 ): Promise<AuthContext | null> {
   try {
-    const supabase = createRouteHandlerClient(req, res);
+    const supabase = await createRouteHandlerClient(req, res);
     
     // Try getSession first, but if that fails, try getUser with the token from cookies
     let session = null;

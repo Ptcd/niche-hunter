@@ -6,8 +6,47 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { NextApiRequest, NextApiResponse } from 'next';
+import type { Session } from '@supabase/supabase-js';
 
-export function createRouteHandlerClient(req: NextApiRequest, res: NextApiResponse) {
+/**
+ * Helper function to set/update session cookie with consistent settings
+ */
+export function setSessionCookie(res: NextApiResponse, session: Session) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
+  const projectRef = supabaseUrl.match(/https:\/\/([^.]+)\.supabase\.co/)?.[1] || 'fpwayqwhdendrgtottwj';
+  const cookieName = `sb-${projectRef}-auth-token`;
+  
+  // Create minimal session object for cookie (avoid cookie size limits)
+  const sessionData = {
+    access_token: session.access_token,
+    refresh_token: session.refresh_token,
+    expires_at: session.expires_at,
+    expires_in: session.expires_in,
+    token_type: session.token_type,
+    user: {
+      id: session.user.id,
+      email: session.user.email,
+    },
+  };
+
+  // URL encode the JSON string to avoid issues with special characters
+  const cookieValue = encodeURIComponent(JSON.stringify(sessionData));
+  const maxAge = 60 * 60 * 24 * 30; // 30 days
+  
+  // Set cookie with proper attributes
+  const cookieOptions = [
+    `${cookieName}=${cookieValue}`,
+    'Path=/',
+    'HttpOnly',
+    'Secure', // Only send over HTTPS
+    'SameSite=Lax', // CSRF protection while allowing same-site navigation
+    `Max-Age=${maxAge}`,
+  ].join('; ');
+  
+  res.setHeader('Set-Cookie', cookieOptions);
+}
+
+export async function createRouteHandlerClient(req: NextApiRequest, res: NextApiResponse) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key';
 
@@ -45,12 +84,44 @@ export function createRouteHandlerClient(req: NextApiRequest, res: NextApiRespon
     },
   });
 
+  // Check if token is expired or expiring soon, and refresh if needed
+  if (initialSession?.expires_at && initialSession?.refresh_token) {
+    const expiresAt = initialSession.expires_at * 1000; // Convert to milliseconds
+    const now = Date.now();
+    const fiveMinutes = 5 * 60 * 1000; // 5 minutes in milliseconds
+    
+    // Refresh if token expires within 5 minutes
+    if (now > expiresAt - fiveMinutes) {
+      try {
+        const { data, error } = await supabase.auth.refreshSession({
+          refresh_token: initialSession.refresh_token,
+        });
+        
+        if (error) {
+          console.warn('[createRouteHandlerClient] Token refresh failed:', error.message);
+        } else if (data.session) {
+          // Update cookie with new tokens
+          setSessionCookie(res, data.session);
+          // Update initialSession with new tokens for immediate use
+          initialSession = {
+            access_token: data.session.access_token,
+            refresh_token: data.session.refresh_token,
+            expires_at: data.session.expires_at,
+            expires_in: data.session.expires_in,
+            token_type: data.session.token_type,
+            user: initialSession.user, // Keep existing user data
+          };
+        }
+      } catch (err: any) {
+        console.warn('[createRouteHandlerClient] Error refreshing token:', err?.message);
+      }
+    }
+  }
+
   // Set session if we have one from cookies
-  // Note: We can't await this in the client creation, but getSession() should work
-  // with the Authorization header we set above
   if (initialSession?.access_token) {
-    // Set session asynchronously (don't await to avoid blocking)
-    supabase.auth.setSession({
+    // Set session synchronously now that we've potentially refreshed
+    await supabase.auth.setSession({
       access_token: initialSession.access_token,
       refresh_token: initialSession.refresh_token,
     }).catch((err) => {

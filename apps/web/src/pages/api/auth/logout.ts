@@ -13,7 +13,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const supabase = createRouteHandlerClient(req, res);
+    const supabase = await createRouteHandlerClient(req, res);
     
     const { error } = await supabase.auth.signOut();
 
