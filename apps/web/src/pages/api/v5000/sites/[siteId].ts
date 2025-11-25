@@ -46,25 +46,7 @@ async function handler(req: NextApiRequest & { auth: any }, res: NextApiResponse
         },
         batch: {
           select: {
-            keywords: {
-              where: { isSkipped: false },
-              take: 10,
-              include: {
-                nicheKeyword: {
-                  select: {
-                    keyword: true,
-                  },
-                },
-                difficultyScore: {
-                  select: {
-                    opportunity: true,
-                  },
-                },
-              },
-              orderBy: [
-                { difficultyScore: { opportunity: 'desc' } },
-              ],
-            },
+            id: true, // Need batchId for separate query
           },
         },
         pages: {
@@ -97,14 +79,41 @@ async function handler(req: NextApiRequest & { auth: any }, res: NextApiResponse
       return res.status(404).json({ error: 'Site not found' });
     }
 
-    // Extract keywords from batch
+    // Fetch keywords with metrics and aggregate by base keyword (sorted by volume)
     const keywords: string[] = [];
-    if (site.batch?.keywords) {
-      for (const kw of site.batch.keywords) {
-        if (kw.nicheKeyword?.keyword) {
-          keywords.push(kw.nicheKeyword.keyword);
-        }
+    if (site.batch?.id) {
+      const batchKeywords = await prisma.keywordV5000.findMany({
+        where: { 
+          batchId: site.batch.id, 
+          isSkipped: false 
+        },
+        include: {
+          nicheKeyword: { 
+            select: { keyword: true } 
+          },
+          metrics: { 
+            select: { searchVolume: true } 
+          },
+        },
+      });
+
+      // Aggregate volume by base keyword
+      const keywordVolumes = new Map<string, number>();
+      for (const kw of batchKeywords) {
+        const baseKeyword = kw.nicheKeyword?.keyword;
+        if (!baseKeyword) continue;
+        
+        const volume = kw.metrics?.searchVolume || 0;
+        keywordVolumes.set(baseKeyword, (keywordVolumes.get(baseKeyword) || 0) + volume);
       }
+
+      // Sort by volume (descending), take top 3
+      const topKeywords = [...keywordVolumes.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([kw]) => kw);
+      
+      keywords.push(...topKeywords);
     }
 
     // Return site with keywords array

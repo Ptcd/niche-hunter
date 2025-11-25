@@ -512,6 +512,7 @@ function generateDomainSuggestions(city: string, state: string, keywords: string
   const cleanNiche = niche.toLowerCase().replace(/[^a-z0-9]/g, '');
   
   // Clean keywords: remove city/state from keyword, lowercase, remove spaces/special chars
+  // Use top 3 keywords (API returns top 3 by volume)
   const cleanKeywords = keywords.slice(0, 3).map(kw => {
     // Remove city and state from keyword if present
     let cleaned = kw.toLowerCase();
@@ -526,6 +527,7 @@ function generateDomainSuggestions(city: string, state: string, keywords: string
   // Use keywords if available, otherwise fall back to niche
   const primaryTerms = cleanKeywords.length > 0 ? cleanKeywords : [cleanNiche];
   
+  // Generate 4 clean patterns per keyword
   for (const term of primaryTerms) {
     // Pattern 1: city + keyword
     suggestions.push(`${cleanCity}${term}.com`);
@@ -533,29 +535,14 @@ function generateDomainSuggestions(city: string, state: string, keywords: string
     // Pattern 2: keyword + city
     suggestions.push(`${term}${cleanCity}.com`);
     
-    // Pattern 3: city + keyword + pros
-    suggestions.push(`${cleanCity}${term}pros.com`);
-    
-    // Pattern 4: keyword + city + state
+    // Pattern 3: keyword + city + state
     suggestions.push(`${term}${cleanCity}${cleanState}.com`);
     
-    // Pattern 5: city + state + keyword
-    suggestions.push(`${cleanCity}${cleanState}${term}.com`);
-    
-    // Pattern 6: keyword + of + city
-    suggestions.push(`${term}of${cleanCity}.com`);
-    
-    // Pattern 7: best + city + keyword
-    suggestions.push(`best${cleanCity}${term}.com`);
+    // Pattern 4: city + keyword + pros
+    suggestions.push(`${cleanCity}${term}pros.com`);
   }
   
-  // Add niche-based suggestions as fallback if we used keywords
-  if (cleanKeywords.length > 0) {
-    suggestions.push(`${cleanCity}${cleanNiche}.com`);
-    suggestions.push(`${cleanNiche}${cleanCity}.com`);
-  }
-  
-  // Remove duplicates and return
+  // Remove duplicates and return (should be 6-8 total suggestions)
   return [...new Set(suggestions)];
 }
 
