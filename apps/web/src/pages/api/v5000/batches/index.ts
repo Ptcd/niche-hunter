@@ -42,9 +42,13 @@ async function handler(req: NextApiRequest & { auth: any }, res: NextApiResponse
 
   if (req.method === 'POST') {
     try {
-      // Ensure tmp directory exists
-      const tmpDir = path.join(process.cwd(), 'tmp');
-      if (!fs.existsSync(tmpDir)) {
+      // Use /tmp for Vercel serverless (only writable directory)
+      // Falls back to local tmp for development
+      const isVercel = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME;
+      const tmpDir = isVercel ? '/tmp' : path.join(process.cwd(), 'tmp');
+      
+      // Ensure tmp directory exists (only needed for local dev)
+      if (!isVercel && !fs.existsSync(tmpDir)) {
         fs.mkdirSync(tmpDir, { recursive: true });
       }
 
