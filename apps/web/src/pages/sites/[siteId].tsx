@@ -78,6 +78,77 @@ function LeadsPanel({ siteId }: { siteId: string }) {
   );
 }
 
+// Keywords Panel Component
+function KeywordsPanel({ 
+  keywordsWithVolume, 
+  totalKeywords,
+  batchId 
+}: { 
+  keywordsWithVolume?: Array<{ keyword: string; volume: number }>;
+  totalKeywords?: number;
+  batchId?: string;
+}) {
+  if (!keywordsWithVolume || keywordsWithVolume.length === 0) {
+    return null;
+  }
+
+  return (
+    <div style={{ border: '1px solid #ddd', borderRadius: '8px', padding: '1.5rem', marginBottom: '2rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+        <h2 style={{ marginTop: 0, marginBottom: 0 }}>Keywords</h2>
+        {totalKeywords && (
+          <span style={{ fontSize: '0.875rem', color: '#666' }}>
+            {totalKeywords} total keywords in batch
+          </span>
+        )}
+      </div>
+      
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
+        {keywordsWithVolume.map((kw, idx) => (
+          <div
+            key={idx}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              padding: '0.5rem 0.75rem',
+              backgroundColor: '#f0f8ff',
+              border: '1px solid #0070f3',
+              borderRadius: '6px',
+              fontSize: '0.875rem',
+            }}
+          >
+            <span style={{ fontWeight: '500', color: '#0070f3' }}>{kw.keyword}</span>
+            <span
+              style={{
+                padding: '0.125rem 0.5rem',
+                backgroundColor: '#0070f3',
+                color: 'white',
+                borderRadius: '4px',
+                fontSize: '0.75rem',
+                fontWeight: '600',
+              }}
+            >
+              {kw.volume.toLocaleString()}/mo
+            </span>
+          </div>
+        ))}
+      </div>
+      
+      {batchId && (
+        <div style={{ marginTop: '1rem', fontSize: '0.875rem', color: '#666' }}>
+          <a 
+            href={`/v5000/batches/${batchId}`}
+            style={{ color: '#0070f3', textDecoration: 'none' }}
+          >
+            View full batch →
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Manual Phone Modal Component
 function ManualPhoneModal({ siteId, onClose, onSuccess }: { siteId: string; onClose: () => void; onSuccess: () => void }) {
   const [trackingNumber, setTrackingNumber] = useState('');
@@ -1120,6 +1191,10 @@ interface Site {
   pages: SitePage[];
   promptProfile: { id: string; name: string } | null;
   keywords: string[];
+  keywordsWithVolume?: Array<{ keyword: string; volume: number }>;
+  batchStats?: { totalKeywords: number };
+  pageStats?: { total: number; published: number; draft: number };
+  batch?: { id: string };
 }
 
 export default function SiteFactoryDetailPage() {
@@ -1358,6 +1433,13 @@ export default function SiteFactoryDetailPage() {
           </button>
         </div>
       </div>
+
+      {/* Keywords Panel */}
+      <KeywordsPanel 
+        keywordsWithVolume={site.keywordsWithVolume}
+        totalKeywords={site.batchStats?.totalKeywords}
+        batchId={site.batch?.id}
+      />
 
       {/* Leads Section */}
       <LeadsPanel siteId={siteId as string} />

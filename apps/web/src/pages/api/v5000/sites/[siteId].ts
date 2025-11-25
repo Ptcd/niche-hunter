@@ -81,7 +81,18 @@ async function handler(req: NextApiRequest & { auth: any }, res: NextApiResponse
 
     // Fetch keywords with metrics and aggregate by base keyword (sorted by volume)
     const keywords: string[] = [];
+    const keywordsWithVolume: Array<{ keyword: string; volume: number }> = [];
+    let totalKeywordsInBatch = 0;
+    
     if (site.batch?.id) {
+      // Get total count of keywords in batch
+      totalKeywordsInBatch = await prisma.keywordV5000.count({
+        where: { 
+          batchId: site.batch.id, 
+          isSkipped: false 
+        },
+      });
+
       const batchKeywords = await prisma.keywordV5000.findMany({
         where: { 
           batchId: site.batch.id, 
@@ -107,19 +118,35 @@ async function handler(req: NextApiRequest & { auth: any }, res: NextApiResponse
         keywordVolumes.set(baseKeyword, (keywordVolumes.get(baseKeyword) || 0) + volume);
       }
 
-      // Sort by volume (descending), take top 3
-      const topKeywords = [...keywordVolumes.entries()]
+      // Sort by volume (descending), take top 10 for display
+      const topKeywordsWithVolume = [...keywordVolumes.entries()]
         .sort((a, b) => b[1] - a[1])
-        .slice(0, 3)
-        .map(([kw]) => kw);
+        .slice(0, 10)
+        .map(([keyword, volume]) => ({ keyword, volume }));
       
-      keywords.push(...topKeywords);
+      keywordsWithVolume.push(...topKeywordsWithVolume);
+      
+      // Keep top 3 for domain suggestions (backward compatibility)
+      keywords.push(...topKeywordsWithVolume.slice(0, 3).map(kw => kw.keyword));
     }
 
-    // Return site with keywords array
+    // Calculate page stats
+    const pagesCreated = site.pages.length;
+    const pagesPublished = site.pages.filter(p => p.status === 'published').length;
+
+    // Return site with keywords array and additional data
     return res.status(200).json({
       ...site,
-      keywords,
+      keywords, // Top 3 for domain suggestions (backward compatibility)
+      keywordsWithVolume, // Top 10 with volumes for display
+      batchStats: {
+        totalKeywords: totalKeywordsInBatch,
+      },
+      pageStats: {
+        total: pagesCreated,
+        published: pagesPublished,
+        draft: pagesCreated - pagesPublished,
+      },
     });
   } catch (error: any) {
     console.error('Error fetching site:', error);
