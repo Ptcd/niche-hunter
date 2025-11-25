@@ -85,17 +85,27 @@ async function handler(req: NextApiRequest & { auth: any }, res: NextApiResponse
     let totalKeywordsInBatch = 0;
     
     if (site.batch?.id) {
-      // Get total count of keywords in batch
+      // Get city record for this site to filter keywords by city
+      const cityRecord = await prisma.cityV5000.findFirst({
+        where: { 
+          city: site.city, 
+          state: site.state 
+        },
+      });
+
+      // Get total count of keywords in batch for this city
       totalKeywordsInBatch = await prisma.keywordV5000.count({
         where: { 
-          batchId: site.batch.id, 
+          batchId: site.batch.id,
+          cityId: cityRecord?.id, // Filter by city
           isSkipped: false 
         },
       });
 
       const batchKeywords = await prisma.keywordV5000.findMany({
         where: { 
-          batchId: site.batch.id, 
+          batchId: site.batch.id,
+          cityId: cityRecord?.id, // Filter by city to show city-specific volumes
           isSkipped: false 
         },
         include: {

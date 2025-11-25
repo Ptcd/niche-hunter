@@ -229,18 +229,19 @@ export function calculateFinalDifficulty(
 
   if (kd !== null && kd !== undefined) {
     // Full calculation with KD
-    // Weights: KD 60%, SERP 25%, Local Pack 15% (on-page removed to keep at 100%)
-    kdComponent = kd * 0.6;
-    serpComponent = serpDifficulty * 0.25;
-    packComponent = packStrength * 0.15;
-    onpageComponent = 0; // Not used in weighted calculation
-    finalDifficulty = kdComponent + serpComponent + packComponent;
+    // Weights: KD 65%, SERP 20%, Local Pack 5%, On-page 10%
+    // Reduced pack weight (pack != organic difficulty), added on-page (title optimization matters)
+    kdComponent = kd * 0.65;
+    serpComponent = serpDifficulty * 0.20;
+    packComponent = packStrength * 0.05; // Reduced - pack doesn't directly affect organic rankings
+    onpageComponent = onpage * 0.10; // Added - title optimization matters for local SEO
+    finalDifficulty = kdComponent + serpComponent + packComponent + onpageComponent;
   } else {
     // No KD - use SERP data only with adjusted weights
     kdComponent = 0;
-    serpComponent = serpDifficulty * 0.6; // SERP becomes primary when KD missing
-    packComponent = packStrength * 0.3;
-    onpageComponent = onpage * 0.1; // Small weight for on-page
+    serpComponent = serpDifficulty * 0.55; // SERP becomes primary when KD missing
+    packComponent = packStrength * 0.15; // Reduced
+    onpageComponent = onpage * 0.30; // Increased when no KD - on-page is more important
     finalDifficulty = serpComponent + packComponent + onpageComponent;
   }
 

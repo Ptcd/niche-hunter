@@ -431,35 +431,46 @@ export default function BatchResultsPage() {
     }
   };
 
-  // Recommendation function
-  function getRecommendation(totalOpportunity: number): {
+  // Recommendation function with rankability filter
+  function getRecommendation(
+    totalOpportunity: number,
+    avgDifficulty: number,
+    easyKeywordCount: number
+  ): {
     level: 'build' | 'consider' | 'maybe' | 'skip';
     label: string;
     color: string;
     bgColor: string;
   } {
-    if (totalOpportunity >= 1500) {
+    // Build Now: profitable AND rankable in 6 months
+    if (totalOpportunity >= 1000 && avgDifficulty <= 45 && easyKeywordCount >= 2) {
       return {
         level: 'build',
         label: '🟢 Build Now',
         color: '#155724',
         bgColor: '#d4edda'
       };
-    } else if (totalOpportunity >= 800) {
+    } 
+    // Consider: decent opportunity, moderate difficulty
+    else if (totalOpportunity >= 600 && avgDifficulty <= 55) {
       return {
         level: 'consider',
         label: '🟡 Consider',
         color: '#856404',
         bgColor: '#fff3cd'
       };
-    } else if (totalOpportunity >= 500) {
+    } 
+    // Maybe: low opportunity OR very easy
+    else if (totalOpportunity >= 400 || avgDifficulty <= 35) {
       return {
         level: 'maybe',
         label: '🟠 Maybe',
         color: '#8a6d3b',
         bgColor: '#fcf8e3'
       };
-    } else {
+    } 
+    // Skip: not worth the effort
+    else {
       return {
         level: 'skip',
         label: '🔴 Skip',
@@ -533,6 +544,11 @@ export default function BatchResultsPage() {
       (sum, kw) => sum + (kw.difficultyScore?.serpWeakness || 0), 0
     ) / cityData.keywords.length;
     
+    // Count easy keywords (difficulty < 40) - these are rankable in 6 months
+    const easyKeywordCount = cityData.keywords.filter(
+      kw => (kw.difficultyScore?.finalDifficulty || 100) < 40
+    ).length;
+    
     // Get top 5 keywords by opportunity (use recalculated if lead value edited)
     const keywordsWithOpportunity = cityData.keywords.map(kw => ({
       ...kw,
@@ -550,8 +566,8 @@ export default function BatchResultsPage() {
         return rest;
       });
     
-    // Calculate recommendation
-    const rec = getRecommendation(cityData.totalOpportunity);
+    // Calculate recommendation with rankability filter
+    const rec = getRecommendation(cityData.totalOpportunity, cityData.avgDifficulty, easyKeywordCount);
     cityData.recommendation = rec.level;
   }
 
@@ -877,7 +893,11 @@ export default function BatchResultsPage() {
                         )}
                       </td>
                       {(() => {
-                        const rec = getRecommendation(cityData.totalOpportunity);
+                        // Count easy keywords for display
+                        const easyKeywordCount = cityData.keywords.filter(
+                          kw => (kw.difficultyScore?.finalDifficulty || 100) < 40
+                        ).length;
+                        const rec = getRecommendation(cityData.totalOpportunity, cityData.avgDifficulty, easyKeywordCount);
                         return (
                           <td style={{ 
                             padding: '0.75rem',
