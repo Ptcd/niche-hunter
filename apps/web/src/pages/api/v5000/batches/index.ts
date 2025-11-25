@@ -4,7 +4,7 @@ import { parse } from 'csv-parse/sync';
 import { IncomingForm } from 'formidable';
 import * as fs from 'fs';
 import * as path from 'path';
-import { processBatch } from '../../../../lib/v5000-processor';
+import { inngest } from '../../../../lib/inngest/client';
 import { withAuth } from '../../../../lib/auth/withAuth';
 
 // Disable body parsing for file uploads
@@ -210,18 +210,22 @@ async function handler(req: NextApiRequest & { auth: any }, res: NextApiResponse
         console.warn('Failed to clean up uploaded file:', cleanupError);
       }
 
-      // Trigger processing (will be called in background)
-      console.log(`🚀 Triggering background processing for batch ${batch.id}`);
-      processBatch(batch.id).catch((error) => {
-        console.error(`❌ Background processing failed for batch ${batch.id}:`, error);
-        // Update batch status to failed if processing doesn't start
-        prisma.scanBatch
-          .update({
-            where: { id: batch.id },
-            data: { status: 'failed' },
-          })
-          .catch(() => {});
-      });
+      // Trigger Inngest background processing
+      console.log(`🚀 Triggering Inngest background processing for batch ${batch.id}`);
+      try {
+        await inngest.send({
+          name: "batch/process",
+          data: { batchId: batch.id }
+        });
+        console.log(`✅ Inngest event sent for batch ${batch.id}`);
+      } catch (error: any) {
+        console.error(`❌ Failed to send Inngest event for batch ${batch.id}:`, error);
+        // Update batch status to failed if event send fails
+        await prisma.scanBatch.update({
+          where: { id: batch.id },
+          data: { status: 'failed' },
+        }).catch(() => {});
+      }
 
       return res.status(201).json(batch);
     } catch (error: any) {
