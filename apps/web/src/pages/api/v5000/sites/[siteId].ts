@@ -132,7 +132,7 @@ async function handler(req: NextApiRequest & { auth: any }, res: NextApiResponse
 
     // Calculate page stats
     const pagesCreated = site.pages.length;
-    const pagesPublished = site.pages.filter(p => p.status === 'published').length;
+    const pagesPublished = site.pages.filter(p => p.status === 'PUBLISHED').length;
 
     // Return site with keywords array and additional data
     return res.status(200).json({
