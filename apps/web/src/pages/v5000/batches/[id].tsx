@@ -1,5 +1,16 @@
 import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
+import {
+  calculateProjectedRevenue,
+  calculateROI,
+  getRecommendation as getRecommendationFromEngine,
+  calculateConfidence,
+  getCTRFromDifficulty,
+  type RevenueResult,
+  type ROIResult,
+  type Recommendation,
+  type Confidence,
+} from '@niche-hunter/core';
 
 interface ProcessingLogEntry {
   keyword: string;
@@ -66,7 +77,7 @@ export default function BatchResultsPage() {
   const [loading, setLoading] = useState(true);
   const [minVolume, setMinVolume] = useState('');
   const [maxDifficulty, setMaxDifficulty] = useState('');
-  const [sortBy, setSortBy] = useState<'opportunity' | 'difficulty' | 'volume' | 'competition'>('opportunity');
+  const [sortBy, setSortBy] = useState<'revenue' | 'difficulty' | 'volume' | 'competition'>('revenue');
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [expandedCities, setExpandedCities] = useState<Set<string>>(new Set());
   const [editedLeadValues, setEditedLeadValues] = useState<Map<string, number>>(new Map());
@@ -384,7 +395,7 @@ export default function BatchResultsPage() {
     city: string;
     state: string;
     keywords: KeywordResult[];
-    totalOpportunity: number;
+    totalOpportunity: number; // Keep for backward compatibility during migration
     totalVolume: number;
     avgDifficulty: number;
     leadValue: number;
@@ -392,6 +403,13 @@ export default function BatchResultsPage() {
     keywordCount: number;
     avgSerpWeakness: number;
     recommendation: 'build' | 'consider' | 'maybe' | 'skip';
+    // New revenue-based fields
+    monthlyRevenue: number;
+    visitors: number;
+    calls: number;
+    roi: ROIResult;
+    confidence: Confidence;
+    keywordsWithRevenue: Array<KeywordResult & RevenueResult>;
   }
 
   // Recalculate opportunity for a keyword with new lead value
@@ -431,52 +449,41 @@ export default function BatchResultsPage() {
     }
   };
 
-  // Recommendation function with rankability filter
-  function getRecommendation(
-    totalOpportunity: number,
-    avgDifficulty: number,
-    easyKeywordCount: number
-  ): {
-    level: 'build' | 'consider' | 'maybe' | 'skip';
+  // Conversion rate constant - TODO: replace with batch/niche-specific value later
+  const CONVERSION_RATE = 0.25;
+
+  // Helper to get recommendation label and styling
+  function getRecommendationLabel(rec: Recommendation): {
     label: string;
     color: string;
     bgColor: string;
   } {
-    // Build Now: profitable AND rankable in 6 months
-    if (totalOpportunity >= 1000 && avgDifficulty <= 45 && easyKeywordCount >= 2) {
-      return {
-        level: 'build',
-        label: '🟢 Build Now',
-        color: '#155724',
-        bgColor: '#d4edda'
-      };
-    } 
-    // Consider: decent opportunity, moderate difficulty
-    else if (totalOpportunity >= 600 && avgDifficulty <= 55) {
-      return {
-        level: 'consider',
-        label: '🟡 Consider',
-        color: '#856404',
-        bgColor: '#fff3cd'
-      };
-    } 
-    // Maybe: low opportunity OR very easy
-    else if (totalOpportunity >= 400 || avgDifficulty <= 35) {
-      return {
-        level: 'maybe',
-        label: '🟠 Maybe',
-        color: '#8a6d3b',
-        bgColor: '#fcf8e3'
-      };
-    } 
-    // Skip: not worth the effort
-    else {
-      return {
-        level: 'skip',
-        label: '🔴 Skip',
-        color: '#721c24',
-        bgColor: '#f8d7da'
-      };
+    switch (rec) {
+      case 'build':
+        return {
+          label: '🟢 Build Now',
+          color: '#155724',
+          bgColor: '#d4edda'
+        };
+      case 'consider':
+        return {
+          label: '🟡 Consider',
+          color: '#856404',
+          bgColor: '#fff3cd'
+        };
+      case 'maybe':
+        return {
+          label: '🟠 Maybe',
+          color: '#8a6d3b',
+          bgColor: '#fcf8e3'
+        };
+      case 'skip':
+      default:
+        return {
+          label: '🔴 Skip',
+          color: '#721c24',
+          bgColor: '#f8d7da'
+        };
     }
   }
 
@@ -497,6 +504,12 @@ export default function BatchResultsPage() {
         keywordCount: 0,
         avgSerpWeakness: 0,
         recommendation: 'skip',
+        monthlyRevenue: 0,
+        visitors: 0,
+        calls: 0,
+        roi: { netMonthly: 0, breakEven: null, profit6: 0 },
+        confidence: 'low',
+        keywordsWithRevenue: [],
       });
     }
     citiesMap.get(cityKey)!.keywords.push(kw);
@@ -549,33 +562,73 @@ export default function BatchResultsPage() {
       kw => (kw.difficultyScore?.finalDifficulty || 100) < 40
     ).length;
     
-    // Get top 5 keywords by opportunity (use recalculated if lead value edited)
-    const keywordsWithOpportunity = cityData.keywords.map(kw => ({
-      ...kw,
-      calculatedOpportunity: editedLeadValue !== undefined
-        ? recalculateOpportunity(kw, editedLeadValue)
-        : (kw.difficultyScore?.opportunity || 0)
-    }));
+    // Calculate projected revenue using new system
+    const revenueResult = calculateProjectedRevenue({
+      totalVolume: cityData.totalVolume,
+      avgDifficulty: cityData.avgDifficulty,
+      leadValue: cityData.leadValue,
+      conversionRate: CONVERSION_RATE,
+    });
     
-    cityData.topKeywords = keywordsWithOpportunity
-      .sort((a, b) => b.calculatedOpportunity - a.calculatedOpportunity)
+    cityData.monthlyRevenue = revenueResult.monthlyRevenue;
+    cityData.visitors = revenueResult.visitors;
+    cityData.calls = revenueResult.calls;
+    
+    // Calculate ROI
+    cityData.roi = calculateROI(cityData.monthlyRevenue);
+    
+    // Calculate confidence
+    cityData.confidence = calculateConfidence(
+      cityData.keywords.map(kw => ({
+        difficulty: kw.difficultyScore?.finalDifficulty || 0,
+        volume: kw.metrics?.searchVolume || 0,
+        kdAvailable: kw.metrics?.kd !== null && kw.metrics?.kd !== undefined,
+      })),
+      cityData.avgDifficulty,
+      cityData.totalVolume,
+    );
+    
+    // Calculate per-keyword revenue for expanded view
+    cityData.keywordsWithRevenue = cityData.keywords.map(kw => {
+      const kwDifficulty = kw.difficultyScore?.finalDifficulty || 0;
+      const kwVolume = kw.metrics?.searchVolume || 0;
+      const kwRevenue = calculateProjectedRevenue({
+        totalVolume: kwVolume,
+        avgDifficulty: kwDifficulty,
+        leadValue: cityData.leadValue,
+        conversionRate: CONVERSION_RATE,
+      });
+      return {
+        ...kw,
+        ...kwRevenue,
+      };
+    });
+    
+    // Get top 5 keywords by revenue (new system)
+    cityData.topKeywords = cityData.keywordsWithRevenue
+      .sort((a, b) => b.monthlyRevenue - a.monthlyRevenue)
       .slice(0, 5)
       .map(kw => {
-        // Remove the temporary calculatedOpportunity field
-        const { calculatedOpportunity, ...rest } = kw;
+        // Remove revenue fields from topKeywords (keep original structure)
+        const { monthlyRevenue, visitors, calls, ...rest } = kw;
         return rest;
       });
     
-    // Calculate recommendation with rankability filter
-    const rec = getRecommendation(cityData.totalOpportunity, cityData.avgDifficulty, easyKeywordCount);
-    cityData.recommendation = rec.level;
+    // Calculate recommendation using new dollar-based system
+    const rec = getRecommendationFromEngine({
+      monthlyRevenue: cityData.monthlyRevenue,
+      avgDifficulty: cityData.avgDifficulty,
+      easyKeywordCount,
+      totalVolume: cityData.totalVolume,
+    });
+    cityData.recommendation = rec;
   }
 
   // Sort cities based on sortBy
   const sortedCities = Array.from(citiesMap.values()).sort((a, b) => {
     switch (sortBy) {
-      case 'opportunity':
-        return b.totalOpportunity - a.totalOpportunity;
+      case 'revenue':
+        return b.monthlyRevenue - a.monthlyRevenue;
       case 'difficulty':
         return a.avgDifficulty - b.avgDifficulty;
       case 'volume':
@@ -584,7 +637,7 @@ export default function BatchResultsPage() {
         // Higher SERP weakness = weaker competition = better (easier to rank)
         return b.avgSerpWeakness - a.avgSerpWeakness;
       default:
-        return b.totalOpportunity - a.totalOpportunity;
+        return b.monthlyRevenue - a.monthlyRevenue;
     }
   });
 
@@ -788,7 +841,7 @@ export default function BatchResultsPage() {
                 onChange={(e) => setSortBy(e.target.value as any)}
                 style={{ padding: '0.25rem' }}
               >
-                <option value="opportunity">Total Opportunity</option>
+                <option value="revenue">Highest Revenue</option>
                 <option value="competition">Lowest Competition</option>
                 <option value="volume">Highest Volume</option>
                 <option value="difficulty">Lowest Difficulty</option>
@@ -806,7 +859,7 @@ export default function BatchResultsPage() {
                 <th style={{ textAlign: 'right', padding: '0.75rem' }}>Keywords</th>
                 <th style={{ textAlign: 'right', padding: '0.75rem' }}>Total Volume</th>
                 <th style={{ textAlign: 'right', padding: '0.75rem' }}>Avg Difficulty</th>
-                <th style={{ textAlign: 'right', padding: '0.75rem' }}>Total Opportunity</th>
+                <th style={{ textAlign: 'right', padding: '0.75rem' }}>Projected Revenue</th>
                 <th style={{ textAlign: 'left', padding: '0.75rem' }}>Top Keywords</th>
                 <th style={{ textAlign: 'center', padding: '0.75rem' }}>Recommendation</th>
                 <th style={{ textAlign: 'center', padding: '0.75rem' }}>Details</th>
@@ -826,10 +879,10 @@ export default function BatchResultsPage() {
                         cursor: 'pointer',
                         backgroundColor: isCityExpanded 
                           ? '#f0f8ff' 
-                          : cityData.totalOpportunity >= 1500 
+                          : cityData.monthlyRevenue >= 800 
                             ? '#f0fff0'  // Light green for build now
                             : 'white',
-                        fontWeight: isCityExpanded || cityData.totalOpportunity >= 1500 
+                        fontWeight: isCityExpanded || cityData.monthlyRevenue >= 800 
                           ? 'bold' 
                           : 'normal',
                       }}
@@ -873,17 +926,16 @@ export default function BatchResultsPage() {
                         {cityData.avgDifficulty.toFixed(1)}
                       </td>
                       <td style={{ padding: '0.75rem', textAlign: 'right', fontWeight: 'bold' }}>
-                        {cityData.totalOpportunity.toFixed(0)}
+                        ${cityData.monthlyRevenue.toLocaleString()}/mo
                       </td>
                       <td style={{ padding: '0.75rem', fontSize: '0.9rem' }}>
                         {cityData.topKeywords.slice(0, 3).map((kw, idx) => {
-                          const editedLeadValue = editedLeadValues.get(cityKey);
-                          const opportunity = editedLeadValue !== undefined
-                            ? recalculateOpportunity(kw, editedLeadValue)
-                            : (kw.difficultyScore?.opportunity || 0);
+                          // Find the keyword in keywordsWithRevenue to get its revenue
+                          const kwWithRevenue = cityData.keywordsWithRevenue.find(k => k.id === kw.id);
+                          const revenue = kwWithRevenue?.monthlyRevenue || 0;
                           return (
                             <span key={kw.id}>
-                              {kw.nicheKeyword.keyword} ({opportunity.toFixed(0)})
+                              {kw.nicheKeyword.keyword} (${revenue}/mo)
                               {idx < Math.min(3, cityData.topKeywords.length) - 1 && ', '}
                             </span>
                           );
@@ -892,24 +944,15 @@ export default function BatchResultsPage() {
                           <span style={{ color: '#666' }}> +{cityData.topKeywords.length - 3} more</span>
                         )}
                       </td>
-                      {(() => {
-                        // Count easy keywords for display
-                        const easyKeywordCount = cityData.keywords.filter(
-                          kw => (kw.difficultyScore?.finalDifficulty || 100) < 40
-                        ).length;
-                        const rec = getRecommendation(cityData.totalOpportunity, cityData.avgDifficulty, easyKeywordCount);
-                        return (
-                          <td style={{ 
-                            padding: '0.75rem',
-                            textAlign: 'center',
-                            backgroundColor: rec.bgColor,
-                            color: rec.color,
-                            fontWeight: 'bold'
-                          }}>
-                            {rec.label}
-                          </td>
-                        );
-                      })()}
+                      <td style={{ 
+                        padding: '0.75rem',
+                        textAlign: 'center',
+                        backgroundColor: getRecommendationLabel(cityData.recommendation).bgColor,
+                        color: getRecommendationLabel(cityData.recommendation).color,
+                        fontWeight: 'bold'
+                      }}>
+                        {getRecommendationLabel(cityData.recommendation).label}
+                      </td>
                       <td style={{ padding: '0.75rem', textAlign: 'center' }}>
                         {isCityExpanded ? '▼' : '▶'}
                       </td>
@@ -918,6 +961,55 @@ export default function BatchResultsPage() {
                       <tr key={`${cityKey}-keywords`}>
                         <td colSpan={8} style={{ padding: '1.5rem', backgroundColor: '#f8f9fa' }}>
                           <div>
+                            {/* Revenue and ROI Summary */}
+                            <div style={{ 
+                              marginBottom: '1.5rem', 
+                              padding: '1rem', 
+                              backgroundColor: 'white', 
+                              borderRadius: '4px',
+                              border: '1px solid #dee2e6'
+                            }}>
+                              <h4 style={{ marginTop: 0, marginBottom: '0.75rem' }}>
+                                📈 Projected Monthly Revenue: ${cityData.monthlyRevenue.toLocaleString()}/mo
+                              </h4>
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
+                                <div>
+                                  <strong>Estimated Visitors:</strong> {cityData.visitors.toLocaleString()}
+                                </div>
+                                <div>
+                                  <strong>Estimated Calls:</strong> {cityData.calls.toLocaleString()}
+                                </div>
+                                <div>
+                                  <strong>Lead Value:</strong> ${cityData.leadValue.toFixed(2)}
+                                </div>
+                                <div>
+                                  <strong>Avg Difficulty:</strong> {cityData.avgDifficulty.toFixed(1)}
+                                </div>
+                                <div>
+                                  <strong>Easy Keywords:</strong> {cityData.keywords.filter(kw => (kw.difficultyScore?.finalDifficulty || 100) < 40).length}
+                                </div>
+                                <div>
+                                  <strong>Confidence:</strong> {
+                                    cityData.confidence === 'high' ? '🟢 High' :
+                                    cityData.confidence === 'medium' ? '🟡 Medium' :
+                                    '🔴 Low'
+                                  }
+                                </div>
+                              </div>
+                              <div style={{ 
+                                padding: '0.75rem', 
+                                backgroundColor: '#e7f3ff', 
+                                borderRadius: '4px',
+                                border: '1px solid #b3d9ff'
+                              }}>
+                                <strong>💰 Financial Outlook</strong>
+                                <div style={{ marginTop: '0.5rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.5rem' }}>
+                                  <div>• Net monthly profit: ${cityData.roi.netMonthly.toLocaleString()}</div>
+                                  <div>• Break-even: {cityData.roi.breakEven === null ? 'Never (unprofitable)' : `${cityData.roi.breakEven} months`}</div>
+                                  <div>• 6-month profit: ${cityData.roi.profit6.toLocaleString()}</div>
+                                </div>
+                              </div>
+                            </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                               <h4 style={{ marginTop: 0, marginBottom: 0 }}>
                                 All Keywords for {cityData.city}, {cityData.state}
@@ -968,29 +1060,19 @@ export default function BatchResultsPage() {
                                 <tr style={{ borderBottom: '1px solid #ddd', backgroundColor: '#e9ecef' }}>
                                   <th style={{ textAlign: 'left', padding: '0.5rem' }}>Keyword</th>
                                   <th style={{ textAlign: 'right', padding: '0.5rem' }}>Volume</th>
-                                  <th style={{ textAlign: 'right', padding: '0.5rem' }}>CPC</th>
                                   <th style={{ textAlign: 'right', padding: '0.5rem' }}>KD</th>
                                   <th style={{ textAlign: 'right', padding: '0.5rem' }}>Difficulty</th>
-                                  <th style={{ textAlign: 'right', padding: '0.5rem' }}>Opportunity</th>
+                                  <th style={{ textAlign: 'right', padding: '0.5rem' }}>Projected Revenue</th>
                                   <th style={{ textAlign: 'center', padding: '0.5rem' }}>Details</th>
                                 </tr>
                               </thead>
                               <tbody>
-                                {(() => {
-                                  const editedLeadValue = editedLeadValues.get(cityKey);
-                                  return cityData.keywords
-                                    .map(kw => ({
-                                      ...kw,
-                                      calculatedOpportunity: editedLeadValue !== undefined
-                                        ? recalculateOpportunity(kw, editedLeadValue)
-                                        : (kw.difficultyScore?.opportunity || 0)
-                                    }))
-                                    .sort((a, b) => b.calculatedOpportunity - a.calculatedOpportunity)
+                                {cityData.keywordsWithRevenue
+                                    .sort((a, b) => b.monthlyRevenue - a.monthlyRevenue)
                                     .map((kw) => {
                                       const isExpanded = expandedRows.has(kw.id);
                                       const score = kw.difficultyScore;
                                       const metrics = kw.metrics;
-                                      const opportunity = kw.calculatedOpportunity;
 
                                       return (
                                         <>
@@ -1010,82 +1092,84 @@ export default function BatchResultsPage() {
                                             <td style={{ padding: '0.5rem', textAlign: 'right' }}>
                                               {metrics?.searchVolume || '-'}
                                             </td>
-                                            <td style={{ padding: '0.5rem', textAlign: 'right' }}>
-                                              {metrics?.cpc ? `$${metrics.cpc.toFixed(2)}` : '-'}
-                                            </td>
                                             <td style={{ padding: '0.5rem', textAlign: 'right' }}>{metrics?.kd || 'N/A'}</td>
                                             <td style={{ padding: '0.5rem', textAlign: 'right' }}>
                                               {score?.finalDifficulty !== null && score?.finalDifficulty !== undefined
                                                 ? score.finalDifficulty.toFixed(1)
                                                 : 'N/A'}
                                             </td>
-                                            <td style={{ padding: '0.5rem', textAlign: 'right' }}>
-                                              {opportunity.toFixed(1)}
+                                            <td style={{ padding: '0.5rem', textAlign: 'right', fontWeight: 'bold' }}>
+                                              ${kw.monthlyRevenue.toLocaleString()}/mo
                                             </td>
                                             <td style={{ padding: '0.5rem', textAlign: 'center' }}>
                                               {isExpanded ? '▼' : '▶'}
                                             </td>
                                           </tr>
-                                        {isExpanded && score && (
-                                          <tr key={`${kw.id}-details`}>
-                                            <td colSpan={7} style={{ padding: '1rem', backgroundColor: '#fff' }}>
-                                              <div style={{ fontSize: '0.85rem' }}>
-                                                <h5 style={{ marginTop: 0 }}>Full Math Breakdown</h5>
-                                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
-                                                  <div>
-                                                    <strong>SERP Weakness:</strong> {score.serpWeakness?.toFixed(1) || 'N/A'}
-                                                    <br />
-                                                    <strong>Local Pack Strength:</strong> {score.localPackStrength?.toFixed(1) || 'N/A'}
-                                                    <br />
-                                                    <strong>On-Page Competence:</strong> {score.onpageCompetence?.toFixed(1) || 'N/A'}
+                                        {isExpanded && score && (() => {
+                                          const editedLeadValue = editedLeadValues.get(cityKey);
+                                          return (
+                                            <tr key={`${kw.id}-details`}>
+                                              <td colSpan={6} style={{ padding: '1rem', backgroundColor: '#fff' }}>
+                                                <div style={{ fontSize: '0.85rem' }}>
+                                                  <h5 style={{ marginTop: 0 }}>Full Math Breakdown</h5>
+                                                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
+                                                    <div>
+                                                      <strong>SERP Weakness:</strong> {score.serpWeakness?.toFixed(1) || 'N/A'}
+                                                      <br />
+                                                      <strong>Local Pack Strength:</strong> {score.localPackStrength?.toFixed(1) || 'N/A'}
+                                                      <br />
+                                                      <strong>On-Page Competence:</strong> {score.onpageCompetence?.toFixed(1) || 'N/A'}
+                                                    </div>
+                                                    <div>
+                                                      <strong>Lead Value:</strong> ${(editedLeadValue !== undefined ? editedLeadValue : cityData.leadValue).toFixed(2)}
+                                                      <br />
+                                                      <strong>Conversion Rate:</strong> {(CONVERSION_RATE * 100).toFixed(0)}%
+                                                    </div>
                                                   </div>
-                                                  <div>
-                                                    <strong>Lead Value:</strong> ${(editedLeadValue !== undefined ? editedLeadValue : (kw.leadValue || 0)).toFixed(2)}
+                                                  <div style={{ marginTop: '0.75rem', padding: '0.75rem', backgroundColor: '#f8f9fa', borderRadius: '4px' }}>
+                                                    <strong>Difficulty Calculation:</strong>
                                                     <br />
-                                                    <strong>CPC Multiplier:</strong> {score.cpcMultiplier?.toFixed(2) || 'N/A'}
+                                                    KD({metrics?.kd || 'N/A'}) × 0.65 = {score.kdComponent?.toFixed(1) || 'N/A'}
                                                     <br />
-                                                    <strong>Lead Value Multiplier:</strong> {((editedLeadValue !== undefined ? editedLeadValue : (kw.leadValue || 0)) / 50).toFixed(2)}
+                                                    SerpDiff({score.serpDifficulty?.toFixed(1) || 'N/A'}) × 0.20 = {score.serpComponent?.toFixed(1) || 'N/A'}
+                                                    <br />
+                                                    Pack({score.localPackStrength?.toFixed(1) || 'N/A'}) × 0.05 = {score.packComponent?.toFixed(1) || 'N/A'}
+                                                    <br />
+                                                    On-Page({score.onpageCompetence?.toFixed(1) || 'N/A'}) × 0.10 = {score.onpageComponent?.toFixed(1) || 'N/A'}
+                                                    <br />
+                                                    <strong>Total Difficulty: {score.finalDifficulty?.toFixed(1) || 'N/A'}</strong>
+                                                  </div>
+                                                  <div style={{ marginTop: '0.75rem', padding: '0.75rem', backgroundColor: '#f8f9fa', borderRadius: '4px' }}>
+                                                    <strong>Revenue Calculation:</strong>
+                                                    <br />
+                                                    Volume({metrics?.searchVolume || 0}) × CTR({getCTRFromDifficulty(score.finalDifficulty || 0).toFixed(3)}) = {kw.visitors} visitors
+                                                    <br />
+                                                    Visitors({kw.visitors}) × Conversion({CONVERSION_RATE}) = {kw.calls} calls
+                                                    <br />
+                                                    Calls({kw.calls}) × Lead Value(${(editedLeadValue !== undefined ? editedLeadValue : cityData.leadValue).toFixed(2)})
+                                                    <br />
+                                                    <strong>= ${kw.monthlyRevenue.toLocaleString()}/mo</strong>
+                                                    {editedLeadValue !== undefined && (
+                                                      <span style={{ color: '#666', fontSize: '0.8rem', marginLeft: '0.5rem' }}>
+                                                        (recalculated)
+                                                      </span>
+                                                    )}
+                                                  </div>
+                                                  <div style={{ marginTop: '0.75rem' }}>
+                                                    <a
+                                                      href={`https://www.google.com/search?q=${encodeURIComponent(kw.localizedQuery)}`}
+                                                      target="_blank"
+                                                      rel="noopener noreferrer"
+                                                      style={{ color: '#0070f3' }}
+                                                    >
+                                                      View SERP on Google →
+                                                    </a>
                                                   </div>
                                                 </div>
-                                                <div style={{ marginTop: '0.75rem', padding: '0.75rem', backgroundColor: '#f8f9fa', borderRadius: '4px' }}>
-                                                  <strong>Difficulty Calculation:</strong>
-                                                  <br />
-                                                  KD({metrics?.kd || 'N/A'}) × 0.6 = {score.kdComponent?.toFixed(1) || 'N/A'}
-                                                  <br />
-                                                  SerpDiff({score.serpDifficulty?.toFixed(1) || 'N/A'}) × 0.25 = {score.serpComponent?.toFixed(1) || 'N/A'}
-                                                  <br />
-                                                  Pack({score.localPackStrength?.toFixed(1) || 'N/A'}) × 0.15 = {score.packComponent?.toFixed(1) || 'N/A'}
-                                                  <br />
-                                                  <strong>Total Difficulty: {score.finalDifficulty?.toFixed(1) || 'N/A'}</strong>
-                                                </div>
-                                                <div style={{ marginTop: '0.75rem', padding: '0.75rem', backgroundColor: '#f8f9fa', borderRadius: '4px' }}>
-                                                  <strong>Opportunity Calculation:</strong>
-                                                  <br />
-                                                  Volume({metrics?.searchVolume || 0}) × (100 - {score.finalDifficulty?.toFixed(1) || 'N/A'}) / 100 = {score.baseOpportunity?.toFixed(1) || 'N/A'}
-                                                  <br />
-                                                  × CPCMult({score.cpcMultiplier?.toFixed(2) || 'N/A'}) × LeadMult({((editedLeadValue !== undefined ? editedLeadValue : (kw.leadValue || 0)) / 50).toFixed(2)})
-                                                  <br />
-                                                  <strong>= {opportunity.toFixed(1)}</strong>
-                                                  {editedLeadValue !== undefined && (
-                                                    <span style={{ color: '#666', fontSize: '0.8rem', marginLeft: '0.5rem' }}>
-                                                      (recalculated)
-                                                    </span>
-                                                  )}
-                                                </div>
-                                                <div style={{ marginTop: '0.75rem' }}>
-                                                  <a
-                                                    href={`https://www.google.com/search?q=${encodeURIComponent(kw.localizedQuery)}`}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    style={{ color: '#0070f3' }}
-                                                  >
-                                                    View SERP on Google →
-                                                  </a>
-                                                </div>
-                                              </div>
-                                            </td>
-                                          </tr>
-                                        )}
+                                              </td>
+                                            </tr>
+                                          );
+                                        })()}
                                       </>
                                     );
                                   });

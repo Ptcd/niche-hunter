@@ -260,8 +260,149 @@ export function calculateFinalDifficulty(
 }
 
 /**
- * Calculate opportunity score
- * Higher = better opportunity for rank-and-rent
+ * Get CTR (Click-Through Rate) based on difficulty score
+ * Difficulty determines expected ranking position after 6 months
+ */
+export function getCTRFromDifficulty(diff: number): number {
+  if (diff < 20) return 0.22;   // Rank 1–2
+  if (diff < 35) return 0.12;   // Rank 2–3
+  if (diff < 50) return 0.07;   // Rank 3–5
+  if (diff < 60) return 0.045;  // Rank 5–7
+  if (diff < 75) return 0.025;  // Rank 7–12
+  return 0.005;                 // Page 2+
+}
+
+/**
+ * Calculate projected monthly revenue
+ * Returns revenue, visitors, and calls for display
+ */
+export interface RevenueResult {
+  monthlyRevenue: number;
+  visitors: number;
+  calls: number;
+}
+
+export interface RevenueInputs {
+  totalVolume: number;
+  avgDifficulty: number;
+  leadValue: number;
+  conversionRate: number; // No default - caller must pass
+}
+
+export function calculateProjectedRevenue({
+  totalVolume,
+  avgDifficulty,
+  leadValue,
+  conversionRate,
+}: RevenueInputs): RevenueResult {
+  const ctr = getCTRFromDifficulty(avgDifficulty);
+  const visitors = totalVolume * ctr;
+  const calls = visitors * conversionRate;
+  const monthlyRevenue = calls * leadValue;
+
+  return {
+    monthlyRevenue: Math.round(monthlyRevenue),
+    visitors: Math.round(visitors),
+    calls: Math.round(calls),
+  };
+}
+
+/**
+ * Calculate ROI metrics
+ * Returns net monthly profit, break-even time, and 6-month profit
+ */
+export interface ROIResult {
+  netMonthly: number;
+  breakEven: number | null; // null = never profitable
+  profit6: number;
+}
+
+export function calculateROI(monthlyRevenue: number): ROIResult {
+  const buildCost = 300;
+  const monthlyCost = 50;
+  const netMonthly = monthlyRevenue - monthlyCost;
+
+  let breakEven: number | null;
+  if (netMonthly <= 0) {
+    breakEven = null; // never breaks even
+  } else {
+    breakEven = Math.round((buildCost / netMonthly) * 10) / 10; // 0.1 months precision
+  }
+
+  const profit6 = (netMonthly * 6) - buildCost;
+
+  return {
+    netMonthly: Math.round(netMonthly),
+    breakEven,
+    profit6: Math.round(profit6),
+  };
+}
+
+/**
+ * Get recommendation based on projected revenue and difficulty
+ */
+export type Recommendation = "build" | "consider" | "maybe" | "skip";
+
+export function getRecommendation({
+  monthlyRevenue,
+  avgDifficulty,
+  easyKeywordCount,
+  totalVolume,
+}: {
+  monthlyRevenue: number;
+  avgDifficulty: number;
+  easyKeywordCount: number;
+  totalVolume: number;
+}): Recommendation {
+  // Skip trivial markets
+  if (monthlyRevenue < 200 || totalVolume < 20) {
+    return "skip";
+  }
+
+  // Build: strong revenue + rankable keywords
+  if (monthlyRevenue >= 800 && easyKeywordCount >= 2) {
+    return "build";
+  }
+
+  // Consider: moderate revenue + moderate difficulty
+  if (monthlyRevenue >= 400 && avgDifficulty <= 55) {
+    return "consider";
+  }
+
+  // Maybe: at least mildly profitable
+  if (monthlyRevenue >= 200) {
+    return "maybe";
+  }
+
+  return "skip";
+}
+
+/**
+ * Calculate confidence level for revenue projection
+ */
+export type Confidence = "high" | "medium" | "low";
+
+export function calculateConfidence(
+  keywords: Array<{ difficulty: number; volume: number; kdAvailable?: boolean }>,
+  avgDifficulty: number,
+  totalVolume: number,
+): Confidence {
+  const keywordCount = keywords.length || 1;
+  const kdAvailableCount = keywords.filter(k => k.kdAvailable !== false).length;
+  const kdCoverage = kdAvailableCount / keywordCount;
+
+  if (kdCoverage > 0.7 && totalVolume >= 100 && avgDifficulty <= 60) {
+    return "high";
+  }
+  if (kdCoverage > 0.4 && totalVolume >= 50) {
+    return "medium";
+  }
+  return "low";
+}
+
+/**
+ * @deprecated Use calculateProjectedRevenue instead
+ * Old opportunity score calculation (kept for backward compatibility during migration)
  */
 export function calculateOpportunity(
   volume: number,
