@@ -221,17 +221,18 @@ export const processBatch = inngest.createFunction(
       try {
         const kdMap = await getBulkKeywordDifficulty(localizedQueries);
         console.log(`✅ DataForSEO Labs returned ${kdMap.size} KD values`);
-        // Convert Map to plain object
+        // Convert Map to plain object - store with lowercase keys for consistent lookup
+        // DataForSEO returns keywords in lowercase
         for (const [key, value] of kdMap.entries()) {
-          kdData[key] = value;
+          kdData[key.toLowerCase()] = value;
         }
       } catch (error: any) {
         console.error(`⚠️ DataForSEO Labs error:`, error.message);
       }
 
-      // Update KD in metrics
+      // Update KD in metrics (normalize to lowercase for matching - DataForSEO returns lowercase)
       for (const kw of keywordsWithCityVolume) {
-        const kd = kdData[kw.localizedQuery];
+        const kd = kdData[kw.localizedQuery] ?? kdData[kw.localizedQuery.toLowerCase()];
         if (kd !== undefined) {
           await prisma.keywordMetricsV5000.update({
             where: { keywordId: kw.id },
@@ -247,11 +248,11 @@ export const processBatch = inngest.createFunction(
         return (data?.volume || 0) >= minVolume;
       });
 
-      // Log all keywords
+      // Log all keywords (normalize KD lookup to lowercase - DataForSEO returns lowercase)
       for (const kw of keywordsWithCityVolume) {
         const data = volumeData[kw.localizedQuery];
         const vol = data?.volume || 0;
-        const kd = kdData[kw.localizedQuery];
+        const kd = kdData[kw.localizedQuery] ?? kdData[kw.localizedQuery.toLowerCase()];
 
         await updateProcessingLog(batchId, {
           keyword: kw.localizedQuery,
@@ -322,10 +323,10 @@ export const processBatch = inngest.createFunction(
               },
             });
 
-            // Calculate scores
+            // Calculate scores (normalize KD lookup to lowercase - DataForSEO returns lowercase)
             const service = kw.nicheKeyword;
             const city = kw.cityName;
-            const kd = kdData[kw.localizedQuery] || null;
+            const kd = kdData[kw.localizedQuery] ?? kdData[kw.localizedQuery.toLowerCase()] ?? null;
 
             const serpWeakness = calculateSerpWeakness(organicResults, service);
             const packStrength = calculateLocalPackStrength(localPackResults, service);
@@ -395,7 +396,7 @@ export const processBatch = inngest.createFunction(
               keyword: kw.localizedQuery,
               volume,
               cpc: data?.cpc || null,
-              kd: kd !== undefined ? kd : null,
+              kd: kd !== undefined && kd !== null ? kd : null,
               status: 'passed',
             });
           } catch (error: any) {
