@@ -1,5 +1,6 @@
 import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
+// Import scoring functions directly to avoid Node.js-only dependencies from @niche-hunter/core
 import {
   calculateProjectedRevenue,
   calculateROI,
@@ -10,7 +11,7 @@ import {
   type ROIResult,
   type Recommendation,
   type Confidence,
-} from '@niche-hunter/core';
+} from '@niche-hunter/core/dist/scoring/v5000-engine';
 
 interface ProcessingLogEntry {
   keyword: string;
