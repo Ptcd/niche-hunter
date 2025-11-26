@@ -9,6 +9,16 @@ const nextConfig = {
   webpack: (config, { isServer }) => {
     if (isServer) {
       config.externals.push('@prisma/client', 'prisma');
+    } else {
+      // Exclude Node.js modules from client bundle
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        net: false,
+        child_process: false,
+        tls: false,
+        crypto: false,
+      };
     }
     return config;
   },
