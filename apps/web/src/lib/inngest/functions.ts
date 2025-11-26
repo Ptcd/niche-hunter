@@ -17,7 +17,7 @@ import {
   calculateFinalDifficulty,
   calculateOpportunity,
   computeAuthorityDifficulty,
-  type PageMetricsData,
+  type PageMetricsData as CorePageMetricsData,
 } from "@niche-hunter/core";
 import { isLargeCity } from "@niche-hunter/core";
 
@@ -451,9 +451,10 @@ export const processBatch = inngest.createFunction(
               }
               
               // Compute authority difficulty from page metrics
-              const pageMetricsArray: PageMetricsData[] = serpUrls
+              // Map crawler's PageMetricsData to core's CorePageMetricsData
+              const pageMetricsArray: CorePageMetricsData[] = serpUrls
                 .map(url => allPageMetrics.get(url))
-                .filter((m): m is PageMetricsData => m !== undefined)
+                .filter((m): m is NonNullable<typeof m> => m !== undefined)
                 .map(m => ({
                   pageRank: m.pageRank,
                   backlinks: m.backlinks,
