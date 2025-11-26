@@ -12,6 +12,10 @@ import {
 } from "@niche-hunter/core";
 import { isLargeCity } from "@niche-hunter/core";
 
+// Type for serializable volume data (Maps don't serialize between steps)
+type VolumeDataRecord = Record<string, { volume: number; cpc: number }>;
+type KdDataRecord = Record<string, number>;
+
 /**
  * Update processing log in database
  */
@@ -134,9 +138,20 @@ export const processBatch = inngest.createFunction(
         return null;
       }
 
+      // Serialize keywords for passing between steps
+      const serializedKeywords = validKeywords.map((kw) => ({
+        id: kw.id,
+        localizedQuery: kw.localizedQuery,
+        cityId: kw.cityId,
+        cityName: kw.city.city,
+        cityState: kw.city.state,
+        cityPayout: kw.city.payout,
+        nicheKeyword: kw.nicheKeyword.keyword,
+      }));
+
       return {
         batchId,
-        keywords: validKeywords,
+        keywords: serializedKeywords,
         localizedQueries: validKeywords.map((kw) => kw.localizedQuery),
       };
     });
@@ -145,17 +160,23 @@ export const processBatch = inngest.createFunction(
       return { success: true, message: "No keywords to process" };
     }
 
-    // Step 2: Fetch volumes from Keywords Everywhere (in chunks of 100)
-    const volumeData = await step.run("fetch-volumes", async () => {
-      const { localizedQueries } = batchData;
+    // Step 2: Fetch volumes from Keywords Everywhere
+    const volumeDataResult = await step.run("fetch-volumes", async () => {
+      const { localizedQueries, keywords } = batchData;
       console.log(`📡 Fetching volumes for ${localizedQueries.length} keywords...`);
       
       const volumeMap = await getBulkKeywordData(localizedQueries);
       console.log(`✅ Keywords Everywhere returned ${volumeMap.size} results`);
 
+      // Convert Map to plain object for serialization
+      const volumeData: VolumeDataRecord = {};
+      for (const [key, value] of volumeMap.entries()) {
+        volumeData[key] = { volume: value.volume, cpc: value.cpc };
+      }
+
       // Store metrics in database
-      for (const kw of batchData.keywords) {
-        const data = volumeMap.get(kw.localizedQuery);
+      for (const kw of keywords) {
+        const data = volumeData[kw.localizedQuery];
         if (data) {
           await prisma.keywordMetricsV5000.upsert({
             where: { keywordId: kw.id },
@@ -174,17 +195,18 @@ export const processBatch = inngest.createFunction(
         }
       }
 
-      return volumeMap;
+      return volumeData;
     });
 
     // Step 3: Filter cities with volume and fetch KD
-    const keywordsWithVolume = await step.run("filter-and-fetch-kd", async () => {
+    const filterResult = await step.run("filter-and-fetch-kd", async () => {
       const { keywords, localizedQueries } = batchData;
+      const volumeData = volumeDataResult;
       
       // Filter out cities where ALL keywords have 0 volume
       const citiesWithVolume = new Set<string>();
       for (const kw of keywords) {
-        const data = volumeData.get(kw.localizedQuery);
+        const data = volumeData[kw.localizedQuery];
         if ((data?.volume || 0) > 0) {
           citiesWithVolume.add(kw.cityId);
         }
@@ -195,18 +217,21 @@ export const processBatch = inngest.createFunction(
       );
 
       // Fetch KD from DataForSEO
-      let kdData: Map<string, number>;
+      let kdData: KdDataRecord = {};
       try {
-        kdData = await getBulkKeywordDifficulty(localizedQueries);
-        console.log(`✅ DataForSEO Labs returned ${kdData.size} KD values`);
+        const kdMap = await getBulkKeywordDifficulty(localizedQueries);
+        console.log(`✅ DataForSEO Labs returned ${kdMap.size} KD values`);
+        // Convert Map to plain object
+        for (const [key, value] of kdMap.entries()) {
+          kdData[key] = value;
+        }
       } catch (error: any) {
         console.error(`⚠️ DataForSEO Labs error:`, error.message);
-        kdData = new Map();
       }
 
       // Update KD in metrics
       for (const kw of keywordsWithCityVolume) {
-        const kd = kdData.get(kw.localizedQuery);
+        const kd = kdData[kw.localizedQuery];
         if (kd !== undefined) {
           await prisma.keywordMetricsV5000.update({
             where: { keywordId: kw.id },
@@ -218,15 +243,15 @@ export const processBatch = inngest.createFunction(
       // Filter keywords with volume >= 10
       const minVolume = 10;
       const passingKeywords = keywordsWithCityVolume.filter((kw) => {
-        const data = volumeData.get(kw.localizedQuery);
+        const data = volumeData[kw.localizedQuery];
         return (data?.volume || 0) >= minVolume;
       });
 
       // Log all keywords
       for (const kw of keywordsWithCityVolume) {
-        const data = volumeData.get(kw.localizedQuery);
+        const data = volumeData[kw.localizedQuery];
         const vol = data?.volume || 0;
-        const kd = kdData.get(kw.localizedQuery);
+        const kd = kdData[kw.localizedQuery];
 
         await updateProcessingLog(batchId, {
           keyword: kw.localizedQuery,
@@ -238,17 +263,22 @@ export const processBatch = inngest.createFunction(
         });
       }
 
-      return { passingKeywords, kdData };
+      return { 
+        passingKeywords, 
+        kdData,
+        volumeData 
+      };
     });
 
     // Step 4: Process keywords in chunks (SERP analysis)
-    const { passingKeywords, kdData } = keywordsWithVolume;
+    const { passingKeywords, kdData, volumeData } = filterResult;
     const chunkSize = 10; // Process 10 keywords per step to avoid timeout
 
     for (let i = 0; i < passingKeywords.length; i += chunkSize) {
+      const chunkIndex = i;
       const chunk = passingKeywords.slice(i, i + chunkSize);
       
-      await step.run(`process-serp-chunk-${i}`, async () => {
+      await step.run(`process-serp-chunk-${chunkIndex}`, async () => {
         // Check for cancellation
         if (await isBatchCancelled(batchId)) {
           await prisma.scanBatch.update({
@@ -260,19 +290,19 @@ export const processBatch = inngest.createFunction(
 
         for (const kw of chunk) {
           try {
-            const data = volumeData.get(kw.localizedQuery);
+            const data = volumeData[kw.localizedQuery];
             const volume = data?.volume || 0;
 
             await updateProcessingLog(batchId, {
               keyword: kw.localizedQuery,
               volume,
               cpc: data?.cpc || null,
-              kd: kdData.get(kw.localizedQuery) !== undefined ? kdData.get(kw.localizedQuery)! : null,
+              kd: kdData[kw.localizedQuery] !== undefined ? kdData[kw.localizedQuery] : null,
               status: 'checking',
             });
 
             // Fetch SERP data
-            const locationName = `${kw.city.city}, ${kw.city.state}, United States`;
+            const locationName = `${kw.cityName}, ${kw.cityState}, United States`;
             const [organicResults, localPackResults] = await Promise.all([
               getOrganicSERP(kw.localizedQuery, locationName).catch(() => []),
               getMapsSERP(kw.localizedQuery, locationName).catch(() => []),
@@ -293,9 +323,9 @@ export const processBatch = inngest.createFunction(
             });
 
             // Calculate scores
-            const service = kw.nicheKeyword.keyword;
-            const city = kw.city.city;
-            const kd = kdData.get(kw.localizedQuery) || null;
+            const service = kw.nicheKeyword;
+            const city = kw.cityName;
+            const kd = kdData[kw.localizedQuery] || null;
 
             const serpWeakness = calculateSerpWeakness(organicResults, service);
             const packStrength = calculateLocalPackStrength(localPackResults, service);
@@ -303,14 +333,14 @@ export const processBatch = inngest.createFunction(
 
             const difficultyBreakdown = calculateFinalDifficulty(kd, serpWeakness, packStrength, onpage);
 
-            if (!kw.city.payout) {
-              throw new Error(`Missing payout for ${kw.city.city}, ${kw.city.state}`);
+            if (!kw.cityPayout) {
+              throw new Error(`Missing payout for ${kw.cityName}, ${kw.cityState}`);
             }
 
             const opportunityBreakdown = calculateOpportunity(
               volume,
               data?.cpc || 0,
-              kw.city.payout,
+              kw.cityPayout,
               difficultyBreakdown.finalDifficulty
             );
 
@@ -351,6 +381,16 @@ export const processBatch = inngest.createFunction(
               },
             });
 
+            // Update progress
+            await prisma.scanBatch.update({
+              where: { id: batchId },
+              data: {
+                processedKeywords: {
+                  increment: 1,
+                },
+              },
+            });
+
             await updateProcessingLog(batchId, {
               keyword: kw.localizedQuery,
               volume,
@@ -388,4 +428,3 @@ export const processBatch = inngest.createFunction(
     return { success: true, processed: passingKeywords.length };
   }
 );
-
