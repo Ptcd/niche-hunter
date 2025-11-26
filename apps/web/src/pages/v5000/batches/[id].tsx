@@ -1172,8 +1172,7 @@ export default function BatchResultsPage() {
                                         })()}
                                       </>
                                     );
-                                  });
-                                })()}
+                                  })}
                               </tbody>
                             </table>
                           </div>
