@@ -40,3 +40,4 @@ The extension files are definitely copied - Chrome just needs to register and lo
 
 
 
+

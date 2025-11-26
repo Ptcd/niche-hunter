@@ -1,7 +1,7 @@
 import { inngest } from "./client";
 import { prisma } from "@niche-hunter/db";
 import { getBulkKeywordData } from "@niche-hunter/crawler";
-import { getBulkKeywordDifficulty } from "@niche-hunter/crawler";
+import { getBulkKeywordDifficulty, getBulkLocationCodes } from "@niche-hunter/crawler";
 import { getOrganicSERP, getMapsSERP } from "@niche-hunter/crawler";
 import {
   calculateSerpWeakness,
@@ -146,13 +146,50 @@ export const processBatch = inngest.createFunction(
         cityName: kw.city.city,
         cityState: kw.city.state,
         cityPayout: kw.city.payout,
+        cityLocationCode: kw.city.dataforseoLocationCode,
         nicheKeyword: kw.nicheKeyword.keyword,
       }));
+
+      // Get unique cities that need location code lookup
+      const citiesNeedingLookup = [...new Map(
+        validKeywords
+          .filter(kw => !kw.city.dataforseoLocationCode)
+          .map(kw => [`${kw.city.city},${kw.city.state}`, { city: kw.city.city, state: kw.city.state, id: kw.city.id }])
+      ).values()];
+
+      // Lookup location codes for cities that don't have them
+      let cityLocationCodes: Record<string, number> = {};
+      if (citiesNeedingLookup.length > 0) {
+        console.log(`📍 Looking up location codes for ${citiesNeedingLookup.length} cities...`);
+        const locationMap = await getBulkLocationCodes(citiesNeedingLookup);
+        
+        // Store location codes in database and build lookup map
+        for (const [key, code] of locationMap.entries()) {
+          cityLocationCodes[key] = code;
+          const [city, state] = key.split(',');
+          const cityRecord = citiesNeedingLookup.find(c => c.city === city && c.state === state);
+          if (cityRecord) {
+            await prisma.cityV5000.update({
+              where: { id: cityRecord.id },
+              data: { dataforseoLocationCode: code },
+            });
+          }
+        }
+        console.log(`✅ Found location codes for ${locationMap.size} cities`);
+      }
+
+      // Also include already-known location codes
+      for (const kw of validKeywords) {
+        if (kw.city.dataforseoLocationCode) {
+          cityLocationCodes[`${kw.city.city},${kw.city.state}`] = kw.city.dataforseoLocationCode;
+        }
+      }
 
       return {
         batchId,
         keywords: serializedKeywords,
         localizedQueries: validKeywords.map((kw) => kw.localizedQuery),
+        cityLocationCodes,
       };
     });
 
@@ -200,7 +237,7 @@ export const processBatch = inngest.createFunction(
 
     // Step 3: Filter cities with volume and fetch KD
     const filterResult = await step.run("filter-and-fetch-kd", async () => {
-      const { keywords, localizedQueries } = batchData;
+      const { keywords, cityLocationCodes } = batchData;
       const volumeData = volumeDataResult;
       
       // Filter out cities where ALL keywords have 0 volume
@@ -216,19 +253,59 @@ export const processBatch = inngest.createFunction(
         citiesWithVolume.has(kw.cityId)
       );
 
-      // Fetch KD from DataForSEO
-      let kdData: KdDataRecord = {};
-      try {
-        const kdMap = await getBulkKeywordDifficulty(localizedQueries);
-        console.log(`✅ DataForSEO Labs returned ${kdMap.size} KD values`);
-        // Convert Map to plain object - store with lowercase keys for consistent lookup
-        // DataForSEO returns keywords in lowercase
-        for (const [key, value] of kdMap.entries()) {
-          kdData[key.toLowerCase()] = value;
+      // Group keywords by city location code for efficient KD fetching
+      const keywordsByLocationCode = new Map<number, string[]>();
+      const keywordsWithoutLocationCode: string[] = [];
+      
+      for (const kw of keywordsWithCityVolume) {
+        const locationCode = kw.cityLocationCode || cityLocationCodes[`${kw.cityName},${kw.cityState}`];
+        if (locationCode) {
+          if (!keywordsByLocationCode.has(locationCode)) {
+            keywordsByLocationCode.set(locationCode, []);
+          }
+          keywordsByLocationCode.get(locationCode)!.push(kw.localizedQuery);
+        } else {
+          keywordsWithoutLocationCode.push(kw.localizedQuery);
         }
-      } catch (error: any) {
-        console.error(`⚠️ DataForSEO Labs error:`, error.message);
       }
+
+      console.log(`📊 Keywords grouped by location: ${keywordsByLocationCode.size} locations, ${keywordsWithoutLocationCode.length} without location code`);
+
+      // Fetch KD from DataForSEO - by city location code for better accuracy
+      let kdData: KdDataRecord = {};
+      
+      // Fetch KD for each location code group
+      for (const [locationCode, kwList] of keywordsByLocationCode.entries()) {
+        try {
+          console.log(`🔍 Fetching KD for ${kwList.length} keywords with location code ${locationCode}...`);
+          const kdMap = await getBulkKeywordDifficulty(kwList, locationCode);
+          console.log(`✅ DataForSEO Labs returned ${kdMap.size} KD values for location ${locationCode}`);
+          
+          // Store with lowercase keys for consistent lookup
+          for (const [key, value] of kdMap.entries()) {
+            kdData[key.toLowerCase()] = value;
+          }
+        } catch (error: any) {
+          console.error(`⚠️ DataForSEO Labs error for location ${locationCode}:`, error.message);
+        }
+      }
+
+      // Fetch KD for keywords without location code using US national (fallback)
+      if (keywordsWithoutLocationCode.length > 0) {
+        try {
+          console.log(`🔍 Fetching KD for ${keywordsWithoutLocationCode.length} keywords with US national location...`);
+          const kdMap = await getBulkKeywordDifficulty(keywordsWithoutLocationCode, 2840);
+          console.log(`✅ DataForSEO Labs returned ${kdMap.size} KD values for US national`);
+          
+          for (const [key, value] of kdMap.entries()) {
+            kdData[key.toLowerCase()] = value;
+          }
+        } catch (error: any) {
+          console.error(`⚠️ DataForSEO Labs error for US national:`, error.message);
+        }
+      }
+
+      console.log(`📈 Total KD values collected: ${Object.keys(kdData).length}`)
 
       // Update KD in metrics (normalize to lowercase for matching - DataForSEO returns lowercase)
       for (const kw of keywordsWithCityVolume) {

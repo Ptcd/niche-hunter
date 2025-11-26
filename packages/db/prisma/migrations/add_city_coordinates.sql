@@ -19,3 +19,4 @@ FROM information_schema.columns
 WHERE table_name = 'CityV5000' 
   AND column_name IN ('latitude', 'longitude');
 
+

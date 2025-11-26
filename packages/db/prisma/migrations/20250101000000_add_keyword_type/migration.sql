@@ -5,3 +5,4 @@ ALTER TABLE "NicheKeyword" ADD COLUMN "keywordType" TEXT;
 ALTER TABLE "KeywordV5000" ADD COLUMN "keywordType" TEXT;
 
 
+

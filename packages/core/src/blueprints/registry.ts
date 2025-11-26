@@ -46,3 +46,4 @@ export function hasBlueprints(nicheSlug: string): boolean {
   return blueprintMap.has(nicheSlug.toLowerCase());
 }
 
+

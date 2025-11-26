@@ -8,6 +8,38 @@
  * - DATAFORSEO_PASSWORD: Your DataForSEO password
  */
 
+// In-memory cache for location codes (city -> location_code)
+const locationCodeCache = new Map<string, number>();
+
+interface DataForSEOLocation {
+  location_code: number;
+  location_name: string;
+  location_code_parent: number | null;
+  country_iso_code: string;
+  location_type: string;
+}
+
+interface DataForSEOLocationsResponse {
+  version: string;
+  status_code: number;
+  status_message: string;
+  time: string;
+  cost: number;
+  tasks_count: number;
+  tasks_error: number;
+  tasks: Array<{
+    id: string;
+    status_code: number;
+    status_message: string;
+    time: string;
+    cost: number;
+    result_count: number;
+    path: string[];
+    data: any;
+    result: DataForSEOLocation[];
+  }>;
+}
+
 interface DataForSEOLabsResponse {
   version: string;
   status_code: number;
@@ -57,6 +89,232 @@ function getDataForSEOCredentials(): { login: string; password: string } {
   }
 
   return { login, password };
+}
+
+/**
+ * Look up DataForSEO location code for a city
+ * 
+ * @param city City name (e.g., "Wesley Chapel")
+ * @param state State name or abbreviation (e.g., "Florida" or "FL")
+ * @param country Country code (default: "US")
+ * @returns Location code or null if not found
+ */
+export async function getLocationCode(
+  city: string,
+  state: string,
+  country: string = 'US'
+): Promise<number | null> {
+  // Normalize the cache key
+  const cacheKey = `${city.toLowerCase()},${state.toLowerCase()},${country.toLowerCase()}`;
+  
+  // Check cache first
+  if (locationCodeCache.has(cacheKey)) {
+    return locationCodeCache.get(cacheKey)!;
+  }
+
+  const { login, password } = getDataForSEOCredentials();
+  const baseUrl = 'https://api.dataforseo.com/v3/serp/google/locations';
+
+  console.log(`[DataForSEO Locations] Looking up location code for: ${city}, ${state}, ${country}`);
+
+  try {
+    const response = await fetch(baseUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Basic ${Buffer.from(`${login}:${password}`).toString('base64')}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => response.statusText);
+      console.error(`[DataForSEO Locations] HTTP Error ${response.status}:`, errorText.substring(0, 500));
+      return null;
+    }
+
+    const data: DataForSEOLocationsResponse = await response.json();
+
+    if (data.tasks && data.tasks.length > 0 && data.tasks[0].result) {
+      const locations = data.tasks[0].result;
+      
+      // Normalize state name (handle abbreviations)
+      const stateAbbreviations: Record<string, string> = {
+        'AL': 'Alabama', 'AK': 'Alaska', 'AZ': 'Arizona', 'AR': 'Arkansas',
+        'CA': 'California', 'CO': 'Colorado', 'CT': 'Connecticut', 'DE': 'Delaware',
+        'FL': 'Florida', 'GA': 'Georgia', 'HI': 'Hawaii', 'ID': 'Idaho',
+        'IL': 'Illinois', 'IN': 'Indiana', 'IA': 'Iowa', 'KS': 'Kansas',
+        'KY': 'Kentucky', 'LA': 'Louisiana', 'ME': 'Maine', 'MD': 'Maryland',
+        'MA': 'Massachusetts', 'MI': 'Michigan', 'MN': 'Minnesota', 'MS': 'Mississippi',
+        'MO': 'Missouri', 'MT': 'Montana', 'NE': 'Nebraska', 'NV': 'Nevada',
+        'NH': 'New Hampshire', 'NJ': 'New Jersey', 'NM': 'New Mexico', 'NY': 'New York',
+        'NC': 'North Carolina', 'ND': 'North Dakota', 'OH': 'Ohio', 'OK': 'Oklahoma',
+        'OR': 'Oregon', 'PA': 'Pennsylvania', 'RI': 'Rhode Island', 'SC': 'South Carolina',
+        'SD': 'South Dakota', 'TN': 'Tennessee', 'TX': 'Texas', 'UT': 'Utah',
+        'VT': 'Vermont', 'VA': 'Virginia', 'WA': 'Washington', 'WV': 'West Virginia',
+        'WI': 'Wisconsin', 'WY': 'Wyoming', 'DC': 'District of Columbia',
+      };
+      
+      const stateFull = stateAbbreviations[state.toUpperCase()] || state;
+      
+      // Search for exact city match within the state
+      // DataForSEO location_name format: "City,State,United States"
+      const cityLower = city.toLowerCase();
+      const stateLower = stateFull.toLowerCase();
+      
+      for (const loc of locations) {
+        if (loc.country_iso_code !== country) continue;
+        if (loc.location_type !== 'City') continue;
+        
+        const nameParts = loc.location_name.toLowerCase().split(',').map(p => p.trim());
+        if (nameParts.length >= 2) {
+          const locCity = nameParts[0];
+          const locState = nameParts[1];
+          
+          if (locCity === cityLower && locState === stateLower) {
+            console.log(`[DataForSEO Locations] Found: ${loc.location_name} -> ${loc.location_code}`);
+            locationCodeCache.set(cacheKey, loc.location_code);
+            return loc.location_code;
+          }
+        }
+      }
+      
+      // Try partial match (city name contains)
+      for (const loc of locations) {
+        if (loc.country_iso_code !== country) continue;
+        if (loc.location_type !== 'City') continue;
+        
+        const nameLower = loc.location_name.toLowerCase();
+        if (nameLower.includes(cityLower) && nameLower.includes(stateLower)) {
+          console.log(`[DataForSEO Locations] Found (partial): ${loc.location_name} -> ${loc.location_code}`);
+          locationCodeCache.set(cacheKey, loc.location_code);
+          return loc.location_code;
+        }
+      }
+      
+      console.log(`[DataForSEO Locations] No match found for ${city}, ${state}`);
+    }
+
+    return null;
+  } catch (error: any) {
+    console.error(`[DataForSEO Locations] Error looking up location:`, error.message);
+    return null;
+  }
+}
+
+/**
+ * Bulk lookup location codes for multiple cities
+ * More efficient than calling getLocationCode for each city
+ * 
+ * @param cities Array of {city, state} objects
+ * @param country Country code (default: "US")
+ * @returns Map of "city,state" -> location_code
+ */
+export async function getBulkLocationCodes(
+  cities: Array<{ city: string; state: string }>,
+  country: string = 'US'
+): Promise<Map<string, number>> {
+  const { login, password } = getDataForSEOCredentials();
+  const baseUrl = 'https://api.dataforseo.com/v3/serp/google/locations';
+  const resultMap = new Map<string, number>();
+
+  // Check cache first and collect cities that need lookup
+  const citiesToLookup: Array<{ city: string; state: string; cacheKey: string }> = [];
+  
+  for (const { city, state } of cities) {
+    const cacheKey = `${city.toLowerCase()},${state.toLowerCase()},${country.toLowerCase()}`;
+    if (locationCodeCache.has(cacheKey)) {
+      resultMap.set(`${city},${state}`, locationCodeCache.get(cacheKey)!);
+    } else {
+      citiesToLookup.push({ city, state, cacheKey });
+    }
+  }
+
+  if (citiesToLookup.length === 0) {
+    console.log(`[DataForSEO Locations] All ${cities.length} cities found in cache`);
+    return resultMap;
+  }
+
+  console.log(`[DataForSEO Locations] Looking up ${citiesToLookup.length} cities (${resultMap.size} cached)`);
+
+  try {
+    const response = await fetch(baseUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Basic ${Buffer.from(`${login}:${password}`).toString('base64')}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      console.error(`[DataForSEO Locations] HTTP Error ${response.status}`);
+      return resultMap;
+    }
+
+    const data: DataForSEOLocationsResponse = await response.json();
+
+    if (data.tasks && data.tasks.length > 0 && data.tasks[0].result) {
+      const locations = data.tasks[0].result;
+      
+      // Build a lookup map for faster searching
+      const locationsByCity = new Map<string, DataForSEOLocation[]>();
+      
+      for (const loc of locations) {
+        if (loc.country_iso_code !== country) continue;
+        if (loc.location_type !== 'City') continue;
+        
+        const nameParts = loc.location_name.toLowerCase().split(',').map(p => p.trim());
+        if (nameParts.length >= 1) {
+          const cityName = nameParts[0];
+          if (!locationsByCity.has(cityName)) {
+            locationsByCity.set(cityName, []);
+          }
+          locationsByCity.get(cityName)!.push(loc);
+        }
+      }
+
+      // State abbreviation map
+      const stateAbbreviations: Record<string, string> = {
+        'AL': 'Alabama', 'AK': 'Alaska', 'AZ': 'Arizona', 'AR': 'Arkansas',
+        'CA': 'California', 'CO': 'Colorado', 'CT': 'Connecticut', 'DE': 'Delaware',
+        'FL': 'Florida', 'GA': 'Georgia', 'HI': 'Hawaii', 'ID': 'Idaho',
+        'IL': 'Illinois', 'IN': 'Indiana', 'IA': 'Iowa', 'KS': 'Kansas',
+        'KY': 'Kentucky', 'LA': 'Louisiana', 'ME': 'Maine', 'MD': 'Maryland',
+        'MA': 'Massachusetts', 'MI': 'Michigan', 'MN': 'Minnesota', 'MS': 'Mississippi',
+        'MO': 'Missouri', 'MT': 'Montana', 'NE': 'Nebraska', 'NV': 'Nevada',
+        'NH': 'New Hampshire', 'NJ': 'New Jersey', 'NM': 'New Mexico', 'NY': 'New York',
+        'NC': 'North Carolina', 'ND': 'North Dakota', 'OH': 'Ohio', 'OK': 'Oklahoma',
+        'OR': 'Oregon', 'PA': 'Pennsylvania', 'RI': 'Rhode Island', 'SC': 'South Carolina',
+        'SD': 'South Dakota', 'TN': 'Tennessee', 'TX': 'Texas', 'UT': 'Utah',
+        'VT': 'Vermont', 'VA': 'Virginia', 'WA': 'Washington', 'WV': 'West Virginia',
+        'WI': 'Wisconsin', 'WY': 'Wyoming', 'DC': 'District of Columbia',
+      };
+
+      // Look up each city
+      for (const { city, state, cacheKey } of citiesToLookup) {
+        const cityLower = city.toLowerCase();
+        const stateFull = stateAbbreviations[state.toUpperCase()] || state;
+        const stateLower = stateFull.toLowerCase();
+        
+        const candidates = locationsByCity.get(cityLower) || [];
+        
+        for (const loc of candidates) {
+          const nameParts = loc.location_name.toLowerCase().split(',').map(p => p.trim());
+          if (nameParts.length >= 2 && nameParts[1] === stateLower) {
+            resultMap.set(`${city},${state}`, loc.location_code);
+            locationCodeCache.set(cacheKey, loc.location_code);
+            break;
+          }
+        }
+      }
+
+      console.log(`[DataForSEO Locations] Found ${resultMap.size} location codes out of ${cities.length} cities`);
+    }
+
+    return resultMap;
+  } catch (error: any) {
+    console.error(`[DataForSEO Locations] Error in bulk lookup:`, error.message);
+    return resultMap;
+  }
 }
 
 /**
