@@ -315,6 +315,27 @@ model DifficultyScoreV5000 {
   @@index([finalDifficulty])
 }
 
+model DomainMetrics {
+  domain      String   @id
+  domainRank  Int      // 0-100
+  fetchedAt   DateTime @default(now())
+  
+  @@index([fetchedAt])
+}
+
+model PageMetrics {
+  url              String   @id
+  domain           String
+  pageRank         Int      // 0-100
+  backlinks        Int
+  referringDomains Int
+  domainRank       Int?     // Cached copy for convenience
+  fetchedAt        DateTime @default(now())
+  
+  @@index([domain])
+  @@index([fetchedAt])
+}
+
 // Site Builder Models
 model Site {
   id                String   @id @default(cuid())

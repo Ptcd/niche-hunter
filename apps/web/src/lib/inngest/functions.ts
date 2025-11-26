@@ -3,12 +3,21 @@ import { prisma } from "@niche-hunter/db";
 import { getBulkKeywordData } from "@niche-hunter/crawler";
 import { getBulkKeywordDifficulty, getBulkLocationCodes } from "@niche-hunter/crawler";
 import { getOrganicSERP, getMapsSERP } from "@niche-hunter/crawler";
+import { getPageMetrics, getDomainMetrics } from "@niche-hunter/crawler";
+import {
+  getCachedPageMetrics,
+  getCachedDomainMetrics,
+  storePageMetrics,
+  storeDomainMetrics,
+} from "@niche-hunter/crawler";
 import {
   calculateSerpWeakness,
   calculateLocalPackStrength,
   calculateOnpageCompetence,
   calculateFinalDifficulty,
   calculateOpportunity,
+  computeAuthorityDifficulty,
+  type PageMetricsData,
 } from "@niche-hunter/core";
 import { isLargeCity } from "@niche-hunter/core";
 
@@ -235,9 +244,9 @@ export const processBatch = inngest.createFunction(
       return volumeData;
     });
 
-    // Step 3: Filter cities with volume and fetch KD
-    const filterResult = await step.run("filter-and-fetch-kd", async () => {
-      const { keywords, cityLocationCodes } = batchData;
+    // Step 3: Filter keywords with volume
+    const filterResult = await step.run("filter-keywords", async () => {
+      const { keywords } = batchData;
       const volumeData = volumeDataResult;
       
       // Filter out cities where ALL keywords have 0 volume
@@ -288,20 +297,17 @@ export const processBatch = inngest.createFunction(
 
       console.log(`💀 Found ${deadKeywords.size} dead keywords (0 volume in all test cities): ${[...deadKeywords].slice(0, 5).join(', ')}${deadKeywords.size > 5 ? '...' : ''}`);
 
-      // Group keywords by city location code for efficient KD fetching
-      // Skip: 1) 0-volume keywords, 2) dead keywords in non-test cities
-      const keywordsByLocationCode = new Map<number, string[]>();
-      const keywordsWithoutLocationCode: string[] = [];
+      // Filter keywords: skip 0-volume and dead keywords in smaller cities
       let skippedZeroVolume = 0;
       let skippedDeadKeywords = 0;
       
-      for (const kw of keywordsWithCityVolume) {
+      const filteredKeywords = keywordsWithCityVolume.filter((kw) => {
         const vol = volumeData[kw.localizedQuery]?.volume || 0;
         
         // Skip 0-volume keywords
         if (vol <= 0) {
           skippedZeroVolume++;
-          continue;
+          return false;
         }
         
         const cityKey = `${kw.cityName},${kw.cityState}`;
@@ -310,89 +316,32 @@ export const processBatch = inngest.createFunction(
         // Skip dead keywords in smaller cities
         if (!isTestCity && deadKeywords.has(kw.nicheKeyword)) {
           skippedDeadKeywords++;
-          continue;
+          return false;
         }
         
-        const locationCode = kw.cityLocationCode || cityLocationCodes[`${kw.cityName},${kw.cityState}`];
-        if (locationCode) {
-          if (!keywordsByLocationCode.has(locationCode)) {
-            keywordsByLocationCode.set(locationCode, []);
-          }
-          keywordsByLocationCode.get(locationCode)!.push(kw.localizedQuery);
-        } else {
-          keywordsWithoutLocationCode.push(kw.localizedQuery);
-        }
-      }
+        return true;
+      });
 
       console.log(`💰 Skipped ${skippedZeroVolume} keywords with 0 volume`);
       console.log(`💰 Skipped ${skippedDeadKeywords} dead keywords in smaller cities`);
-      console.log(`📊 Keywords grouped by location: ${keywordsByLocationCode.size} locations, ${keywordsWithoutLocationCode.length} without location code`);
-
-      // Fetch KD from DataForSEO - by city location code for better accuracy
-      let kdData: KdDataRecord = {};
-      
-      // Fetch KD for each location code group
-      for (const [locationCode, kwList] of keywordsByLocationCode.entries()) {
-        try {
-          console.log(`🔍 Fetching KD for ${kwList.length} keywords with location code ${locationCode}...`);
-          const kdMap = await getBulkKeywordDifficulty(kwList, locationCode);
-          console.log(`✅ DataForSEO Labs returned ${kdMap.size} KD values for location ${locationCode}`);
-          
-          // Store with lowercase keys for consistent lookup
-          for (const [key, value] of kdMap.entries()) {
-            kdData[key.toLowerCase()] = value;
-          }
-        } catch (error: any) {
-          console.error(`⚠️ DataForSEO Labs error for location ${locationCode}:`, error.message);
-        }
-      }
-
-      // Fetch KD for keywords without location code using US national (fallback)
-      if (keywordsWithoutLocationCode.length > 0) {
-        try {
-          console.log(`🔍 Fetching KD for ${keywordsWithoutLocationCode.length} keywords with US national location...`);
-          const kdMap = await getBulkKeywordDifficulty(keywordsWithoutLocationCode, 2840);
-          console.log(`✅ DataForSEO Labs returned ${kdMap.size} KD values for US national`);
-          
-          for (const [key, value] of kdMap.entries()) {
-            kdData[key.toLowerCase()] = value;
-          }
-        } catch (error: any) {
-          console.error(`⚠️ DataForSEO Labs error for US national:`, error.message);
-        }
-      }
-
-      console.log(`📈 Total KD values collected: ${Object.keys(kdData).length}`)
-
-      // Update KD in metrics (normalize to lowercase for matching - DataForSEO returns lowercase)
-      for (const kw of keywordsWithCityVolume) {
-        const kd = kdData[kw.localizedQuery] ?? kdData[kw.localizedQuery.toLowerCase()];
-        if (kd !== undefined) {
-          await prisma.keywordMetricsV5000.update({
-            where: { keywordId: kw.id },
-            data: { kd },
-          });
-        }
-      }
 
       // Filter keywords with volume >= 10
       const minVolume = 10;
-      const passingKeywords = keywordsWithCityVolume.filter((kw) => {
+      const passingKeywords = filteredKeywords.filter((kw) => {
         const data = volumeData[kw.localizedQuery];
         return (data?.volume || 0) >= minVolume;
       });
 
-      // Log all keywords (normalize KD lookup to lowercase - DataForSEO returns lowercase)
+      // Log all keywords
       for (const kw of keywordsWithCityVolume) {
         const data = volumeData[kw.localizedQuery];
         const vol = data?.volume || 0;
-        const kd = kdData[kw.localizedQuery] ?? kdData[kw.localizedQuery.toLowerCase()];
 
         await updateProcessingLog(batchId, {
           keyword: kw.localizedQuery,
           volume: vol,
           cpc: data?.cpc || null,
-          kd: kd !== undefined ? kd : null,
+          kd: null, // No longer using KD from API
           status: vol >= minVolume ? 'passed' : 'filtered',
           reason: vol < minVolume ? `Volume ${vol} < ${minVolume}` : undefined,
         });
@@ -400,13 +349,12 @@ export const processBatch = inngest.createFunction(
 
       return { 
         passingKeywords, 
-        kdData,
         volumeData 
       };
     });
 
     // Step 4: Process keywords in chunks (SERP analysis)
-    const { passingKeywords, kdData, volumeData } = filterResult;
+    const { passingKeywords, volumeData } = filterResult;
     const chunkSize = 10; // Process 10 keywords per step to avoid timeout
 
     for (let i = 0; i < passingKeywords.length; i += chunkSize) {
@@ -432,7 +380,7 @@ export const processBatch = inngest.createFunction(
               keyword: kw.localizedQuery,
               volume,
               cpc: data?.cpc || null,
-              kd: kdData[kw.localizedQuery] !== undefined ? kdData[kw.localizedQuery] : null,
+              kd: null, // Authority difficulty computed from page metrics, not KD API
               status: 'checking',
             });
 
@@ -457,16 +405,76 @@ export const processBatch = inngest.createFunction(
               },
             });
 
-            // Calculate scores (normalize KD lookup to lowercase - DataForSEO returns lowercase)
+            // Extract URLs from SERP results for authority metrics
+            const serpUrls = organicResults.slice(0, 10).map(r => r.url).filter(Boolean);
+            
+            // Get cached page metrics and fetch missing ones
+            let authorityDifficulty: number | null = null;
+            try {
+              const { cached: cachedPageMetrics, toFetch: urlsToFetch } = await getCachedPageMetrics(serpUrls);
+              
+              // Fetch missing page metrics
+              let allPageMetrics = new Map(cachedPageMetrics);
+              if (urlsToFetch.length > 0) {
+                const fetchedMetrics = await getPageMetrics(urlsToFetch);
+                for (const [url, metrics] of fetchedMetrics.entries()) {
+                  allPageMetrics.set(url, metrics);
+                }
+                
+                // Store newly fetched metrics
+                await storePageMetrics([...fetchedMetrics.values()]);
+              }
+              
+              // Extract domains and fetch domain metrics if needed
+              const domains = [...new Set([...allPageMetrics.values()].map(m => m.domain))];
+              const { cached: cachedDomainMetrics, toFetch: domainsToFetch } = await getCachedDomainMetrics(domains);
+              
+              if (domainsToFetch.length > 0) {
+                const fetchedDomainMetrics = await getDomainMetrics(domainsToFetch);
+                await storeDomainMetrics([...fetchedDomainMetrics.values()]);
+                
+                // Update page metrics with domain ranks
+                for (const [url, pageMetrics] of allPageMetrics.entries()) {
+                  const domainMetrics = fetchedDomainMetrics.get(pageMetrics.domain) || cachedDomainMetrics.get(pageMetrics.domain);
+                  if (domainMetrics) {
+                    pageMetrics.domainRank = domainMetrics.domainRank;
+                  }
+                }
+              } else {
+                // Use cached domain metrics
+                for (const [url, pageMetrics] of allPageMetrics.entries()) {
+                  const domainMetrics = cachedDomainMetrics.get(pageMetrics.domain);
+                  if (domainMetrics) {
+                    pageMetrics.domainRank = domainMetrics.domainRank;
+                  }
+                }
+              }
+              
+              // Compute authority difficulty from page metrics
+              const pageMetricsArray: PageMetricsData[] = serpUrls
+                .map(url => allPageMetrics.get(url))
+                .filter((m): m is PageMetricsData => m !== undefined)
+                .map(m => ({
+                  pageRank: m.pageRank,
+                  backlinks: m.backlinks,
+                  referringDomains: m.referringDomains,
+                  domainRank: m.domainRank,
+                }));
+              
+              authorityDifficulty = computeAuthorityDifficulty(pageMetricsArray);
+            } catch (error: any) {
+              console.error(`[Inngest] Error fetching authority metrics for ${kw.localizedQuery}:`, error.message);
+              // Continue with fallback (no authority data)
+            }
+
+            // Calculate scores
             const service = kw.nicheKeyword;
             const city = kw.cityName;
-            const kd = kdData[kw.localizedQuery] ?? kdData[kw.localizedQuery.toLowerCase()] ?? null;
-
             const serpWeakness = calculateSerpWeakness(organicResults, service);
             const packStrength = calculateLocalPackStrength(localPackResults, service);
             const onpage = calculateOnpageCompetence(organicResults, service, city);
 
-            const difficultyBreakdown = calculateFinalDifficulty(kd, serpWeakness, packStrength, onpage);
+            const difficultyBreakdown = calculateFinalDifficulty(authorityDifficulty, serpWeakness, packStrength, onpage);
 
             if (!kw.cityPayout) {
               throw new Error(`Missing payout for ${kw.cityName}, ${kw.cityState}`);
@@ -485,7 +493,7 @@ export const processBatch = inngest.createFunction(
               create: {
                 keywordId: kw.id,
                 serpWeakness,
-                authorityProfile: 0,
+                authorityProfile: authorityDifficulty ?? 0,
                 localPackStrength: packStrength,
                 onpageCompetence: onpage,
                 finalDifficulty: difficultyBreakdown.finalDifficulty,
@@ -501,6 +509,7 @@ export const processBatch = inngest.createFunction(
               },
               update: {
                 serpWeakness,
+                authorityProfile: authorityDifficulty ?? 0,
                 localPackStrength: packStrength,
                 onpageCompetence: onpage,
                 finalDifficulty: difficultyBreakdown.finalDifficulty,
@@ -530,7 +539,7 @@ export const processBatch = inngest.createFunction(
               keyword: kw.localizedQuery,
               volume,
               cpc: data?.cpc || null,
-              kd: kd !== undefined && kd !== null ? kd : null,
+              kd: authorityDifficulty, // Store authority difficulty (computed from page metrics)
               status: 'passed',
             });
           } catch (error: any) {

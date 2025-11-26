@@ -583,7 +583,7 @@ export default function BatchResultsPage() {
       cityData.keywords.map(kw => ({
         difficulty: kw.difficultyScore?.finalDifficulty || 0,
         volume: kw.metrics?.searchVolume || 0,
-        kdAvailable: kw.metrics?.kd !== null && kw.metrics?.kd !== undefined,
+        authorityAvailable: (kw.difficultyScore?.authorityProfile ?? 0) > 0, // Check if we have authority data
       })),
       cityData.avgDifficulty,
       cityData.totalVolume,
@@ -800,7 +800,7 @@ export default function BatchResultsPage() {
                       {entry.volume !== null && entry.volume !== undefined && (
                         <span> - Vol: {entry.volume}</span>
                       )}
-                      {entry.kd !== null && entry.kd !== undefined && <span>, KD: {entry.kd}</span>}
+                      {entry.kd !== null && entry.kd !== undefined && <span>, Authority: {entry.kd}</span>}
                       {entry.cpc !== null && entry.cpc !== undefined && (
                         <span>, CPC: ${entry.cpc.toFixed(2)}</span>
                       )}
@@ -1061,7 +1061,6 @@ export default function BatchResultsPage() {
                                 <tr style={{ borderBottom: '1px solid #ddd', backgroundColor: '#e9ecef' }}>
                                   <th style={{ textAlign: 'left', padding: '0.5rem' }}>Keyword</th>
                                   <th style={{ textAlign: 'right', padding: '0.5rem' }}>Volume</th>
-                                  <th style={{ textAlign: 'right', padding: '0.5rem' }}>KD</th>
                                   <th style={{ textAlign: 'right', padding: '0.5rem' }}>Difficulty</th>
                                   <th style={{ textAlign: 'right', padding: '0.5rem' }}>Projected Revenue</th>
                                   <th style={{ textAlign: 'center', padding: '0.5rem' }}>Details</th>
@@ -1093,7 +1092,7 @@ export default function BatchResultsPage() {
                                             <td style={{ padding: '0.5rem', textAlign: 'right' }}>
                                               {metrics?.searchVolume || '-'}
                                             </td>
-                                            <td style={{ padding: '0.5rem', textAlign: 'right' }}>{metrics?.kd || 'N/A'}</td>
+                                            {/* KD column removed - using authority-based difficulty instead */}
                                             <td style={{ padding: '0.5rem', textAlign: 'right' }}>
                                               {score?.finalDifficulty !== null && score?.finalDifficulty !== undefined
                                                 ? score.finalDifficulty.toFixed(1)
@@ -1130,13 +1129,25 @@ export default function BatchResultsPage() {
                                                   <div style={{ marginTop: '0.75rem', padding: '0.75rem', backgroundColor: '#f8f9fa', borderRadius: '4px' }}>
                                                     <strong>Difficulty Calculation:</strong>
                                                     <br />
-                                                    KD({metrics?.kd || 'N/A'}) × 0.65 = {score.kdComponent?.toFixed(1) || 'N/A'}
-                                                    <br />
-                                                    SerpDiff({score.serpDifficulty?.toFixed(1) || 'N/A'}) × 0.20 = {score.serpComponent?.toFixed(1) || 'N/A'}
-                                                    <br />
-                                                    Pack({score.localPackStrength?.toFixed(1) || 'N/A'}) × 0.05 = {score.packComponent?.toFixed(1) || 'N/A'}
-                                                    <br />
-                                                    On-Page({score.onpageCompetence?.toFixed(1) || 'N/A'}) × 0.10 = {score.onpageComponent?.toFixed(1) || 'N/A'}
+                                                    {score.authorityProfile > 0 ? (
+                                                      <>
+                                                        Authority({score.authorityProfile?.toFixed(1) || 'N/A'}) × 0.40 = {score.kdComponent?.toFixed(1) || 'N/A'}
+                                                        <br />
+                                                        SerpDiff({score.serpDifficulty?.toFixed(1) || 'N/A'}) × 0.35 = {score.serpComponent?.toFixed(1) || 'N/A'}
+                                                        <br />
+                                                        On-Page({score.onpageCompetence?.toFixed(1) || 'N/A'}) × 0.15 = {score.onpageComponent?.toFixed(1) || 'N/A'}
+                                                        <br />
+                                                        Pack({score.localPackStrength?.toFixed(1) || 'N/A'}) × 0.10 = {score.packComponent?.toFixed(1) || 'N/A'}
+                                                      </>
+                                                    ) : (
+                                                      <>
+                                                        SerpDiff({score.serpDifficulty?.toFixed(1) || 'N/A'}) × 0.55 = {score.serpComponent?.toFixed(1) || 'N/A'}
+                                                        <br />
+                                                        On-Page({score.onpageCompetence?.toFixed(1) || 'N/A'}) × 0.30 = {score.onpageComponent?.toFixed(1) || 'N/A'}
+                                                        <br />
+                                                        Pack({score.localPackStrength?.toFixed(1) || 'N/A'}) × 0.15 = {score.packComponent?.toFixed(1) || 'N/A'}
+                                                      </>
+                                                    )}
                                                     <br />
                                                     <strong>Total Difficulty: {score.finalDifficulty?.toFixed(1) || 'N/A'}</strong>
                                                   </div>

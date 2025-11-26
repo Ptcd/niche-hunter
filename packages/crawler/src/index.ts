@@ -5,6 +5,8 @@ export * from './keywords-everywhere-api';
 export * from './chrome-launcher';
 export * from './dataforseo-labs';
 export * from './dataforseo-serp';
+export * from './dataforseo-backlinks';
+export * from './backlinks-cache';
 // Export cancellation functions
 export { setGlobalCancellation, isGloballyCancelled } from './searchatlas';
 // Export keyword discovery functions

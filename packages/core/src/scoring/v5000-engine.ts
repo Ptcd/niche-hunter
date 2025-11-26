@@ -207,51 +207,150 @@ export function calculateOnpageCompetence(
 }
 
 /**
+ * Page metrics data structure for authority calculation
+ */
+export interface PageMetricsData {
+  pageRank: number; // 0-100
+  backlinks: number;
+  referringDomains: number;
+  domainRank: number; // 0-100
+}
+
+/**
+ * Score backlinks count (0-100 scale)
+ * Simple cap for v1 - can be enhanced with log scale later
+ */
+export function scoreBacklinks(backlinks: number | undefined): number {
+  if (!backlinks || backlinks <= 0) return 0;
+  return Math.min(100, backlinks); // Simple cap for v1
+}
+
+/**
+ * Compute page strength from metrics
+ * Combines pageRank, backlinks, and domainRank
+ */
+export function computePageStrength(metrics: PageMetricsData): number {
+  const pageRank = metrics.pageRank ?? 0;
+  const domainRank = metrics.domainRank ?? 0;
+  const backlinksScore = scoreBacklinks(metrics.backlinks);
+  
+  // Weighted blend: 50% pageRank, 30% backlinks, 20% domainRank
+  const pageStrength =
+    (pageRank * 0.5) +
+    (backlinksScore * 0.3) +
+    (domainRank * 0.2);
+  
+  return Math.max(0, Math.min(100, pageStrength));
+}
+
+/**
+ * Compute authority difficulty from SERP results' page metrics
+ * Returns null if insufficient data (< 3 results with metrics)
+ */
+export function computeAuthorityDifficulty(results: PageMetricsData[]): number | null {
+  const strengths = results
+    .map(computePageStrength)
+    .filter(s => s > 0); // Require some data
+
+  if (strengths.length < 3) {
+    return null; // Need at least 3 results with usable data
+  }
+
+  const avg = strengths.reduce((sum, s) => sum + s, 0) / strengths.length;
+  return Math.max(0, Math.min(100, avg));
+}
+
+/**
+ * Calculate final difficulty score with authority data
+ */
+function computeFinalDifficultyWithAuthority(
+  authorityDifficulty: number,
+  serpDifficulty: number,
+  onpageCompetence: number,
+  localPackStrength: number,
+): number {
+  const final =
+    (authorityDifficulty * 0.40) +
+    (serpDifficulty * 0.35) +
+    (onpageCompetence * 0.15) +
+    (localPackStrength * 0.10);
+
+  return Math.max(0, Math.min(100, final));
+}
+
+/**
+ * Calculate final difficulty score without authority data (fallback)
+ */
+function computeFinalDifficultyFallback(
+  serpDifficulty: number,
+  onpageCompetence: number,
+  localPackStrength: number,
+): number {
+  const final =
+    (serpDifficulty * 0.55) +
+    (onpageCompetence * 0.30) +
+    (localPackStrength * 0.15);
+
+  return Math.max(0, Math.min(100, final));
+}
+
+/**
  * Calculate final difficulty score
- * Combines DataForSEO KD with local SERP heuristics
+ * Combines authority metrics (pageRank, backlinks, domainRank) with local SERP heuristics
+ * 
+ * @param authorityDifficultyOrKd Authority-based difficulty (0-100) or legacy KD, or null if unavailable
+ * @param serpWeakness SERP weakness score (0-100, higher = weaker/easier)
+ * @param packStrength Local pack strength (0-100, higher = stronger/harder)
+ * @param onpage On-page competence (0-100, higher = more optimized/harder)
  */
 export function calculateFinalDifficulty(
-  kd: number | null, // DataForSEO KD (0-100), null if not available
+  authorityDifficultyOrKd: number | null,
   serpWeakness: number,
   packStrength: number,
   onpage: number
 ): DifficultyBreakdown {
+  const authorityDifficulty = authorityDifficultyOrKd; // Accepts both authorityDifficulty and legacy KD
   // Convert serpWeakness to serpDifficulty (higher = harder)
   const serpDifficulty = 100 - serpWeakness;
 
-  // If KD is not available, use SERP data only
-  // Weight SERP more heavily when KD is missing
   let finalDifficulty: number;
   let kdComponent: number;
   let serpComponent: number;
   let packComponent: number;
   let onpageComponent: number;
 
-  if (kd !== null && kd !== undefined) {
-    // Full calculation with KD
-    // Weights: KD 65%, SERP 20%, Local Pack 5%, On-page 10%
-    // Reduced pack weight (pack != organic difficulty), added on-page (title optimization matters)
-    kdComponent = kd * 0.65;
-    serpComponent = serpDifficulty * 0.20;
-    packComponent = packStrength * 0.05; // Reduced - pack doesn't directly affect organic rankings
-    onpageComponent = onpage * 0.10; // Added - title optimization matters for local SEO
-    finalDifficulty = kdComponent + serpComponent + packComponent + onpageComponent;
+  if (authorityDifficulty !== null) {
+    // With authority data: 40% authority + 35% SERP + 15% onpage + 10% local pack
+    finalDifficulty = computeFinalDifficultyWithAuthority(
+      authorityDifficulty,
+      serpDifficulty,
+      onpage,
+      packStrength
+    );
+    kdComponent = authorityDifficulty * 0.40; // Renamed from kdComponent but same concept
+    serpComponent = serpDifficulty * 0.35;
+    packComponent = packStrength * 0.10;
+    onpageComponent = onpage * 0.15;
   } else {
-    // No KD - use SERP data only with adjusted weights
+    // Fallback: 55% SERP + 30% onpage + 15% local pack
+    finalDifficulty = computeFinalDifficultyFallback(
+      serpDifficulty,
+      onpage,
+      packStrength
+    );
     kdComponent = 0;
-    serpComponent = serpDifficulty * 0.55; // SERP becomes primary when KD missing
-    packComponent = packStrength * 0.15; // Reduced
-    onpageComponent = onpage * 0.30; // Increased when no KD - on-page is more important
-    finalDifficulty = serpComponent + packComponent + onpageComponent;
+    serpComponent = serpDifficulty * 0.55;
+    packComponent = packStrength * 0.15;
+    onpageComponent = onpage * 0.30;
   }
 
   return {
     serpWeakness,
-    authorityProfile: 0, // Not used in V5000 (replaced by KD)
+    authorityProfile: authorityDifficulty ?? 0, // Store authority difficulty here
     localPackStrength: packStrength,
     onpageCompetence: onpage,
     serpDifficulty,
-    kdComponent,
+    kdComponent, // Now represents authority component
     serpComponent,
     packComponent,
     onpageComponent,
@@ -383,18 +482,19 @@ export function getRecommendation({
 export type Confidence = "high" | "medium" | "low";
 
 export function calculateConfidence(
-  keywords: Array<{ difficulty: number; volume: number; kdAvailable?: boolean }>,
+  keywords: Array<{ difficulty: number; volume: number; authorityAvailable?: boolean }>,
   avgDifficulty: number,
   totalVolume: number,
 ): Confidence {
   const keywordCount = keywords.length || 1;
-  const kdAvailableCount = keywords.filter(k => k.kdAvailable !== false).length;
-  const kdCoverage = kdAvailableCount / keywordCount;
+  // Check if we have authority data (authorityProfile > 0 means we computed it from page metrics)
+  const authorityAvailableCount = keywords.filter(k => k.authorityAvailable !== false).length;
+  const authorityCoverage = authorityAvailableCount / keywordCount;
 
-  if (kdCoverage > 0.7 && totalVolume >= 100 && avgDifficulty <= 60) {
+  if (authorityCoverage > 0.7 && totalVolume >= 100 && avgDifficulty <= 60) {
     return "high";
   }
-  if (kdCoverage > 0.4 && totalVolume >= 50) {
+  if (authorityCoverage > 0.4 && totalVolume >= 50) {
     return "medium";
   }
   return "low";
