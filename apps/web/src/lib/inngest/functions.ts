@@ -253,11 +253,66 @@ export const processBatch = inngest.createFunction(
         citiesWithVolume.has(kw.cityId)
       );
 
+      // Identify test cities (highest total volume) - top 3 cities
+      const cityVolumes = new Map<string, number>();
+      for (const kw of keywordsWithCityVolume) {
+        const vol = volumeData[kw.localizedQuery]?.volume || 0;
+        const cityKey = `${kw.cityName},${kw.cityState}`;
+        cityVolumes.set(cityKey, (cityVolumes.get(cityKey) || 0) + vol);
+      }
+
+      const sortedCities = [...cityVolumes.entries()]
+        .sort((a, b) => b[1] - a[1]);
+      const testCities = new Set(sortedCities.slice(0, 3).map(([city]) => city));
+
+      console.log(`🏙️ Test cities (top 3 by volume): ${[...testCities].join(', ')}`);
+
+      // Find base keywords with 0 volume in ALL test cities
+      const baseKeywordVolumeInTestCities = new Map<string, number>();
+      for (const kw of keywordsWithCityVolume) {
+        const cityKey = `${kw.cityName},${kw.cityState}`;
+        if (!testCities.has(cityKey)) continue;
+        
+        const vol = volumeData[kw.localizedQuery]?.volume || 0;
+        baseKeywordVolumeInTestCities.set(
+          kw.nicheKeyword,
+          (baseKeywordVolumeInTestCities.get(kw.nicheKeyword) || 0) + vol
+        );
+      }
+
+      const deadKeywords = new Set(
+        [...baseKeywordVolumeInTestCities.entries()]
+          .filter(([_, vol]) => vol === 0)
+          .map(([kw]) => kw)
+      );
+
+      console.log(`💀 Found ${deadKeywords.size} dead keywords (0 volume in all test cities): ${[...deadKeywords].slice(0, 5).join(', ')}${deadKeywords.size > 5 ? '...' : ''}`);
+
       // Group keywords by city location code for efficient KD fetching
+      // Skip: 1) 0-volume keywords, 2) dead keywords in non-test cities
       const keywordsByLocationCode = new Map<number, string[]>();
       const keywordsWithoutLocationCode: string[] = [];
+      let skippedZeroVolume = 0;
+      let skippedDeadKeywords = 0;
       
       for (const kw of keywordsWithCityVolume) {
+        const vol = volumeData[kw.localizedQuery]?.volume || 0;
+        
+        // Skip 0-volume keywords
+        if (vol <= 0) {
+          skippedZeroVolume++;
+          continue;
+        }
+        
+        const cityKey = `${kw.cityName},${kw.cityState}`;
+        const isTestCity = testCities.has(cityKey);
+        
+        // Skip dead keywords in smaller cities
+        if (!isTestCity && deadKeywords.has(kw.nicheKeyword)) {
+          skippedDeadKeywords++;
+          continue;
+        }
+        
         const locationCode = kw.cityLocationCode || cityLocationCodes[`${kw.cityName},${kw.cityState}`];
         if (locationCode) {
           if (!keywordsByLocationCode.has(locationCode)) {
@@ -269,6 +324,8 @@ export const processBatch = inngest.createFunction(
         }
       }
 
+      console.log(`💰 Skipped ${skippedZeroVolume} keywords with 0 volume`);
+      console.log(`💰 Skipped ${skippedDeadKeywords} dead keywords in smaller cities`);
       console.log(`📊 Keywords grouped by location: ${keywordsByLocationCode.size} locations, ${keywordsWithoutLocationCode.length} without location code`);
 
       // Fetch KD from DataForSEO - by city location code for better accuracy
