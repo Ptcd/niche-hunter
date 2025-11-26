@@ -89,6 +89,70 @@ function extractDomain(url: string): string {
 }
 
 /**
+ * Get bulk ranks for URLs/domains using the optimized bulk_ranks endpoint
+ * Can check up to 1000 targets in a single request - much more cost effective
+ * Only returns rank, not full metrics (backlinks, referring_domains)
+ * 
+ * @param targets Array of URLs or domains to check
+ * @returns Map of target -> rank (0-100)
+ */
+export async function getBulkRanks(targets: string[]): Promise<Map<string, number>> {
+  const { login, password } = getDataForSEOCredentials();
+  const baseUrl = 'https://api.dataforseo.com/v3/backlinks/bulk_ranks/live';
+  const resultMap = new Map<string, number>();
+  
+  // Bulk ranks endpoint allows up to 1000 targets per request
+  const maxBatchSize = 1000;
+  
+  for (let i = 0; i < targets.length; i += maxBatchSize) {
+    const batch = targets.slice(i, i + maxBatchSize);
+    
+    const requestBody = [{
+      targets: batch,
+      rank_scale: 'one_hundred', // Use 0-100 scale
+    }];
+
+    console.log(`[DataForSEO Bulk Ranks] Fetching ranks for ${batch.length} targets (batch ${Math.floor(i / maxBatchSize) + 1})`);
+
+    try {
+      const response = await fetch(baseUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${Buffer.from(`${login}:${password}`).toString('base64')}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => response.statusText);
+        console.error(`[DataForSEO Bulk Ranks] HTTP Error ${response.status}:`, errorText.substring(0, 1000));
+        continue;
+      }
+
+      const data = await response.json();
+
+      if (data.tasks && data.tasks[0]?.result?.[0]?.items) {
+        for (const item of data.tasks[0].result[0].items) {
+          const target = item.target;
+          if (!target) continue;
+          
+          const rank = item.rank ?? 0;
+          resultMap.set(target, Math.max(0, Math.min(100, rank)));
+        }
+
+        console.log(`[DataForSEO Bulk Ranks] Successfully parsed ${resultMap.size} ranks from ${batch.length} targets`);
+      }
+    } catch (error: any) {
+      console.error(`[DataForSEO Bulk Ranks] Error fetching ranks for batch:`, error.message);
+      continue;
+    }
+  }
+
+  return resultMap;
+}
+
+/**
  * Get page-level metrics (rank, backlinks, referring_domains) for URLs
  * Uses the /backlinks/summary/live endpoint which takes one target per task
  * 

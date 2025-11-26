@@ -217,28 +217,45 @@ export interface PageMetricsData {
 }
 
 /**
- * Score backlinks count (0-100 scale)
- * Simple cap for v1 - can be enhanced with log scale later
+ * Score backlinks count (0-100 scale) using logarithmic scale
+ * This provides better distribution - a page with 10 backlinks scores ~20,
+ * 100 backlinks scores ~40, 1000 scores ~60, 10000 scores ~80
  */
 export function scoreBacklinks(backlinks: number | undefined): number {
   if (!backlinks || backlinks <= 0) return 0;
-  return Math.min(100, backlinks); // Simple cap for v1
+  // Logarithmic scale: log10(backlinks + 1) * 20
+  // 10 backlinks = ~20, 100 = ~40, 1000 = ~60, 10000 = ~80
+  return Math.min(100, Math.log10(backlinks + 1) * 20);
+}
+
+/**
+ * Score referring domains count (0-100 scale) using logarithmic scale
+ * Similar to backlinks but referring domains are more valuable
+ */
+export function scoreReferringDomains(referringDomains: number | undefined): number {
+  if (!referringDomains || referringDomains <= 0) return 0;
+  // Logarithmic scale: log10(referringDomains + 1) * 25
+  // 10 domains = ~25, 100 = ~50, 1000 = ~75
+  return Math.min(100, Math.log10(referringDomains + 1) * 25);
 }
 
 /**
  * Compute page strength from metrics
- * Combines pageRank, backlinks, and domainRank
+ * Combines pageRank, backlinks, referring domains, and domainRank
  */
 export function computePageStrength(metrics: PageMetricsData): number {
   const pageRank = metrics.pageRank ?? 0;
   const domainRank = metrics.domainRank ?? 0;
   const backlinksScore = scoreBacklinks(metrics.backlinks);
+  const referringDomainsScore = scoreReferringDomains(metrics.referringDomains);
   
-  // Weighted blend: 50% pageRank, 30% backlinks, 20% domainRank
+  // Weighted blend: 40% pageRank, 25% referring domains, 20% backlinks, 15% domainRank
+  // Referring domains weighted higher than raw backlinks (quality > quantity)
   const pageStrength =
-    (pageRank * 0.5) +
-    (backlinksScore * 0.3) +
-    (domainRank * 0.2);
+    (pageRank * 0.40) +
+    (referringDomainsScore * 0.25) +
+    (backlinksScore * 0.20) +
+    (domainRank * 0.15);
   
   return Math.max(0, Math.min(100, pageStrength));
 }
