@@ -583,7 +583,8 @@ export default function BatchResultsPage() {
       cityData.keywords.map(kw => ({
         difficulty: kw.difficultyScore?.finalDifficulty || 0,
         volume: kw.metrics?.searchVolume || 0,
-        authorityAvailable: (kw.difficultyScore?.authorityProfile ?? 0) > 0, // Check if we have authority data
+        // Check if we have authority data (authorityProfile field may not exist in older data)
+        authorityAvailable: ((kw.difficultyScore as any)?.authorityProfile ?? 0) > 0,
       })),
       cityData.avgDifficulty,
       cityData.totalVolume,
@@ -1129,9 +1130,9 @@ export default function BatchResultsPage() {
                                                   <div style={{ marginTop: '0.75rem', padding: '0.75rem', backgroundColor: '#f8f9fa', borderRadius: '4px' }}>
                                                     <strong>Difficulty Calculation:</strong>
                                                     <br />
-                                                    {score.authorityProfile > 0 ? (
+                                                    {((score as any).authorityProfile ?? 0) > 0 ? (
                                                       <>
-                                                        Authority({score.authorityProfile?.toFixed(1) || 'N/A'}) × 0.40 = {score.kdComponent?.toFixed(1) || 'N/A'}
+                                                        Authority({(score as any).authorityProfile?.toFixed(1) || 'N/A'}) × 0.40 = {score.kdComponent?.toFixed(1) || 'N/A'}
                                                         <br />
                                                         SerpDiff({score.serpDifficulty?.toFixed(1) || 'N/A'}) × 0.35 = {score.serpComponent?.toFixed(1) || 'N/A'}
                                                         <br />
