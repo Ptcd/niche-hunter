@@ -8,7 +8,8 @@
     "packages/*"
   ],
   "dependencies": {
-    "@niche-hunter/ai": "*"
+    "@niche-hunter/ai": "*",
+    "inngest": "^3.46.0"
   },
   "scripts": {
     "dev": "npm run dev --workspace=apps/web",
