@@ -56,7 +56,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Parse IVR options
-    const ivrOptions = (Array.isArray(site.ivrOptions) ? site.ivrOptions : []) as IvrOption[];
+    const ivrOptions = (Array.isArray(site.ivrOptions) ? site.ivrOptions : []) as unknown as IvrOption[];
     const selectedOption = ivrOptions.find((opt) => opt.digit === digits);
 
     if (!selectedOption || !selectedOption.forwardTo) {
