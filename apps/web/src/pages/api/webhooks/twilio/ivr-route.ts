@@ -17,7 +17,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const digits = req.body.Digits || req.body.digits;
 
     if (!siteId) {
-      return res.status(400).type("text/xml").send(
+      res.setHeader("Content-Type", "text/xml");
+      return res.status(400).send(
         '<?xml version="1.0" encoding="UTF-8"?><Response><Say>Error: Site ID required</Say></Response>'
       );
     }
@@ -30,7 +31,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const voiceUrl = baseUrl 
         ? `${baseUrl}/api/webhooks/twilio/voice`
         : `/api/webhooks/twilio/voice`;
-      return res.status(200).type("text/xml").send(
+      res.setHeader("Content-Type", "text/xml");
+      return res.status(200).send(
         `<?xml version="1.0" encoding="UTF-8"?><Response><Redirect>${voiceUrl}</Redirect></Response>`
       );
     }
@@ -41,7 +43,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
 
     if (!site) {
-      return res.status(404).type("text/xml").send(
+      res.setHeader("Content-Type", "text/xml");
+      return res.status(404).send(
         '<?xml version="1.0" encoding="UTF-8"?><Response><Say>Error: Site not found</Say></Response>'
       );
     }
@@ -62,7 +65,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       twiml += '<Say voice="alice">Invalid selection. Please try again.</Say>';
       twiml += `<Redirect>${voiceUrl}</Redirect>`;
       twiml += '</Response>';
-      return res.status(200).type("text/xml").send(twiml);
+      res.setHeader("Content-Type", "text/xml");
+      return res.status(200).send(twiml);
     }
 
     // Route to the selected number
@@ -96,7 +100,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(200).send(twiml);
   } catch (err: any) {
     console.error("[twilio-ivr-route] error:", err);
-    return res.status(500).type("text/xml").send(
+    res.setHeader("Content-Type", "text/xml");
+    return res.status(500).send(
       '<?xml version="1.0" encoding="UTF-8"?><Response><Say>Error processing selection</Say></Response>'
     );
   }
