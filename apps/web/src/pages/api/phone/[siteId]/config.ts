@@ -6,6 +6,7 @@
 
 import type { NextApiRequest, NextApiResponse } from "next";
 import { prisma } from "@niche-hunter/db";
+import { Prisma } from "@prisma/client";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { siteId } = req.query;
@@ -104,7 +105,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           whisperMessage: whisperMessage !== undefined ? whisperMessage : null,
           ivrEnabled: ivrEnabled !== undefined ? ivrEnabled : false,
           ivrGreeting: ivrGreeting !== undefined ? ivrGreeting : null,
-          ivrOptions: ivrOptions !== undefined ? ivrOptions : null,
+          ivrOptions: ivrOptions !== undefined ? ivrOptions : Prisma.JsonNull,
         },
       });
 
