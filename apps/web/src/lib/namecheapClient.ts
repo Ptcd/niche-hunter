@@ -2,14 +2,24 @@
  * Namecheap API Client
  * 
  * Client for checking domain availability and registering domains via Namecheap XML API.
+ * 
+ * Uses a proxy on Cloudways to handle Namecheap's IP whitelist requirement.
+ * The proxy forwards requests from Vercel (dynamic IPs) through Cloudways (static IP).
  */
 
 const NAMECHEAP_API_USER = process.env.NAMECHEAP_API_USER;
 const NAMECHEAP_API_KEY = process.env.NAMECHEAP_API_KEY;
-const NAMECHEAP_USERNAME = process.env.NAMECHEAP_USERNAME;
+const NAMECHEAP_USERNAME = process.env.NAMECHEAP_USERNAME || process.env.NAMECHEAP_API_USER;
 const NAMECHEAP_CLIENT_IP = process.env.NAMECHEAP_CLIENT_IP;
 
-if (!NAMECHEAP_API_USER || !NAMECHEAP_API_KEY || !NAMECHEAP_USERNAME || !NAMECHEAP_CLIENT_IP) {
+// Proxy configuration for routing through Cloudways
+const NAMECHEAP_PROXY_URL = process.env.NAMECHEAP_PROXY_URL; // e.g., https://your-cloudways.com/namecheap-proxy.php
+const NAMECHEAP_PROXY_SECRET = process.env.NAMECHEAP_PROXY_SECRET;
+
+// Check if we're using proxy mode or direct mode
+const USE_PROXY = !!NAMECHEAP_PROXY_URL && !!NAMECHEAP_PROXY_SECRET;
+
+if (!USE_PROXY && (!NAMECHEAP_API_USER || !NAMECHEAP_API_KEY || !NAMECHEAP_CLIENT_IP)) {
   console.warn("[namecheapClient] Missing Namecheap env vars; domain operations will fail.");
 }
 
@@ -35,30 +45,63 @@ interface NamecheapResponse {
 }
 
 /**
+ * Make a request to Namecheap API (either directly or through proxy)
+ */
+async function makeNamecheapRequest(params: URLSearchParams): Promise<string> {
+  if (USE_PROXY) {
+    // Route through Cloudways proxy
+    const response = await fetch(NAMECHEAP_PROXY_URL!, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-Proxy-Secret': NAMECHEAP_PROXY_SECRET!,
+      },
+      body: params.toString(),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Proxy request failed: ${response.status} ${response.statusText}`);
+    }
+    
+    return response.text();
+  } else {
+    // Direct request to Namecheap (requires whitelisted IP)
+    const response = await fetch(`${NAMECHEAP_API_URL}?${params.toString()}`);
+    return response.text();
+  }
+}
+
+/**
  * Check domain availability via Namecheap API
  */
 export async function checkDomainAvailability(
   domain: string
 ): Promise<"available" | "taken" | "error"> {
-  if (!NAMECHEAP_API_USER || !NAMECHEAP_API_KEY || !NAMECHEAP_USERNAME || !NAMECHEAP_CLIENT_IP) {
-    throw new Error("Namecheap API credentials not configured");
+  // Check credentials based on mode
+  if (USE_PROXY) {
+    if (!NAMECHEAP_PROXY_URL || !NAMECHEAP_PROXY_SECRET) {
+      throw new Error("Namecheap proxy not configured");
+    }
+  } else {
+    if (!NAMECHEAP_API_USER || !NAMECHEAP_API_KEY || !NAMECHEAP_CLIENT_IP) {
+      throw new Error("Namecheap API credentials not configured");
+    }
   }
 
   // Clean domain (remove protocol, www, etc.)
   const cleanDomain = domain.replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0].toLowerCase();
 
   const params = new URLSearchParams({
-    ApiUser: NAMECHEAP_API_USER,
-    ApiKey: NAMECHEAP_API_KEY,
-    UserName: NAMECHEAP_USERNAME,
+    ApiUser: NAMECHEAP_API_USER || '',
+    ApiKey: NAMECHEAP_API_KEY || '',
+    UserName: NAMECHEAP_USERNAME || NAMECHEAP_API_USER || '',
     Command: "namecheap.domains.check",
-    ClientIp: NAMECHEAP_CLIENT_IP,
+    ClientIp: NAMECHEAP_CLIENT_IP || '',
     DomainList: cleanDomain,
   });
 
   try {
-    const response = await fetch(`${NAMECHEAP_API_URL}?${params.toString()}`);
-    const text = await response.text();
+    const text = await makeNamecheapRequest(params);
 
     // Parse XML response (simplified - in production, use proper XML parser)
     const availableMatch = text.match(/Available="(true|false)"/);
@@ -97,18 +140,25 @@ export async function registerDomain(
     country: string;
   }
 ): Promise<{ success: boolean; raw: any }> {
-  if (!NAMECHEAP_API_USER || !NAMECHEAP_API_KEY || !NAMECHEAP_USERNAME || !NAMECHEAP_CLIENT_IP) {
-    throw new Error("Namecheap API credentials not configured");
+  // Check credentials based on mode
+  if (USE_PROXY) {
+    if (!NAMECHEAP_PROXY_URL || !NAMECHEAP_PROXY_SECRET) {
+      throw new Error("Namecheap proxy not configured");
+    }
+  } else {
+    if (!NAMECHEAP_API_USER || !NAMECHEAP_API_KEY || !NAMECHEAP_CLIENT_IP) {
+      throw new Error("Namecheap API credentials not configured");
+    }
   }
 
   const cleanDomain = domain.replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0].toLowerCase();
 
   const params = new URLSearchParams({
-    ApiUser: NAMECHEAP_API_USER,
-    ApiKey: NAMECHEAP_API_KEY,
-    UserName: NAMECHEAP_USERNAME,
+    ApiUser: NAMECHEAP_API_USER || '',
+    ApiKey: NAMECHEAP_API_KEY || '',
+    UserName: NAMECHEAP_USERNAME || NAMECHEAP_API_USER || '',
     Command: "namecheap.domains.create",
-    ClientIp: NAMECHEAP_CLIENT_IP,
+    ClientIp: NAMECHEAP_CLIENT_IP || '',
     DomainName: cleanDomain,
     Years: years.toString(),
     // Contact info (simplified - Namecheap requires multiple contact types)
@@ -152,8 +202,7 @@ export async function registerDomain(
   });
 
   try {
-    const response = await fetch(`${NAMECHEAP_API_URL}?${params.toString()}`);
-    const text = await response.text();
+    const text = await makeNamecheapRequest(params);
 
     // Check for success
     if (text.includes('Registered="true"')) {
