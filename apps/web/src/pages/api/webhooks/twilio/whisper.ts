@@ -26,7 +26,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(200).send(twiml);
   } catch (err: any) {
     console.error("[twilio-whisper] error:", err);
-    return res.status(500).type("text/xml").send(
+    res.setHeader("Content-Type", "text/xml");
+    return res.status(500).send(
       '<?xml version="1.0" encoding="UTF-8"?><Response></Response>'
     );
   }
