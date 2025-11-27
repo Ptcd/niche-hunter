@@ -19,7 +19,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (!calledNumber) {
       console.error("[twilio-voice] No called number in request");
-      return res.status(400).type("text/xml").send(
+      res.setHeader("Content-Type", "text/xml");
+      return res.status(400).send(
         '<?xml version="1.0" encoding="UTF-8"?><Response><Say>Error: Invalid request</Say></Response>'
       );
     }
@@ -36,14 +37,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (!site) {
       console.error("[twilio-voice] Site not found for number:", calledNumber);
-      return res.status(404).type("text/xml").send(
+      res.setHeader("Content-Type", "text/xml");
+      return res.status(404).send(
         '<?xml version="1.0" encoding="UTF-8"?><Response><Say>Error: Number not configured</Say></Response>'
       );
     }
 
     if (!site.forwardToNumber) {
       console.error("[twilio-voice] No forward-to number configured for site:", site.id);
-      return res.status(400).type("text/xml").send(
+      res.setHeader("Content-Type", "text/xml");
+      return res.status(400).send(
         '<?xml version="1.0" encoding="UTF-8"?><Response><Say>Error: Forward number not configured</Say></Response>'
       );
     }
@@ -111,7 +114,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(200).send(twiml);
   } catch (err: any) {
     console.error("[twilio-voice] error:", err);
-    return res.status(500).type("text/xml").send(
+    res.setHeader("Content-Type", "text/xml");
+    return res.status(500).send(
       '<?xml version="1.0" encoding="UTF-8"?><Response><Say>Error processing call</Say></Response>'
     );
   }
