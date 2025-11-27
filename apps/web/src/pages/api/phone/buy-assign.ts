@@ -10,7 +10,18 @@ import { PhoneSource } from "@prisma/client";
 import { buyPhoneNumber } from "../../../lib/twilioClient";
 import { logCost } from "../../../server/costs/logCost";
 
-const TWILIO_VOICE_WEBHOOK_URL = process.env.TWILIO_VOICE_WEBHOOK_URL || "";
+// Build webhook URL - use env var if set, otherwise construct from request
+function getVoiceWebhookUrl(): string {
+  const envUrl = process.env.TWILIO_VOICE_WEBHOOK_URL;
+  if (envUrl) return envUrl;
+  
+  // Fallback: construct from Vercel URL or use relative path
+  const baseUrl = process.env.VERCEL_URL 
+    ? `https://${process.env.VERCEL_URL}`
+    : process.env.NEXT_PUBLIC_APP_URL || '';
+  
+  return baseUrl ? `${baseUrl}/api/webhooks/twilio/voice` : '/api/webhooks/twilio/voice';
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
@@ -39,8 +50,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(404).json({ error: "Site not found" });
     }
 
-    // Purchase phone number
-    const result = await buyPhoneNumber(phoneNumber, TWILIO_VOICE_WEBHOOK_URL);
+    // Purchase phone number with voice webhook
+    const voiceWebhookUrl = getVoiceWebhookUrl();
+    const result = await buyPhoneNumber(phoneNumber, voiceWebhookUrl);
 
     // Update site with phone number
     await prisma.site.update({

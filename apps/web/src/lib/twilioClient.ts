@@ -49,6 +49,58 @@ export async function searchPhoneNumbers(areaCode: string): Promise<PhoneNumber[
 }
 
 /**
+ * Search available phone numbers by city and state (location-based)
+ * Falls back to area code search if location search returns no results
+ */
+export async function searchPhoneNumbersByLocation(
+  city: string,
+  state: string,
+  limit: number = 10
+): Promise<PhoneNumber[]> {
+  if (!client) {
+    throw new Error("Twilio client not configured");
+  }
+
+  try {
+    // First, try location-based search
+    const availableNumbers = await client.availablePhoneNumbers(TWILIO_DEFAULT_COUNTRY)
+      .local.list({
+        inLocality: city,
+        inRegion: state,
+        limit,
+      });
+
+    if (availableNumbers && availableNumbers.length > 0) {
+      return availableNumbers.map((number: any) => ({
+        phoneNumber: number.phoneNumber || "",
+        friendlyName: number.friendlyName || number.phoneNumber || "",
+      }));
+    }
+
+    // If no results, try searching by state only
+    const stateNumbers = await client.availablePhoneNumbers(TWILIO_DEFAULT_COUNTRY)
+      .local.list({
+        inRegion: state,
+        limit,
+      });
+
+    if (stateNumbers && stateNumbers.length > 0) {
+      return stateNumbers.map((number: any) => ({
+        phoneNumber: number.phoneNumber || "",
+        friendlyName: number.friendlyName || number.phoneNumber || "",
+      }));
+    }
+
+    // If still no results, return empty array
+    return [];
+  } catch (err: any) {
+    console.error("[twilioClient] Location search failed:", err);
+    // Don't throw - return empty array so UI can show fallback
+    return [];
+  }
+}
+
+/**
  * Purchase and configure a phone number
  */
 export async function buyPhoneNumber(

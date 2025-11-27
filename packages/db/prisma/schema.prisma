@@ -362,6 +362,12 @@ model Site {
   twilioNumber      String?  // Purchased Twilio number (legacy, use trackingNumber)
   twilioNumberSid   String?  // Twilio resource ID
   forwardToNumber   String?  // Where calls forward to
+  // Call routing configuration
+  whisperEnabled    Boolean  @default(false)
+  whisperMessage    String?  // Message played to agent before connecting
+  ivrEnabled        Boolean  @default(false)
+  ivrGreeting       String?  // IVR greeting message
+  ivrOptions        Json?    // Array of IVR menu options: [{digit: "1", label: "Sales", forwardTo: "+1234567890"}]
   registrar         String?  // "namecheap" | null
   logoUrl           String?  // URL to logo image
   promptProfileId   String?  // Link to PromptProfile

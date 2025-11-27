@@ -257,10 +257,40 @@ function ManualPhoneModal({ siteId, onClose, onSuccess }: { siteId: string; onCl
 function TwilioPhoneModal({ siteId, onClose, onSuccess }: { siteId: string; onClose: () => void; onSuccess: () => void }) {
   const [areaCode, setAreaCode] = useState('');
   const [numbers, setNumbers] = useState<Array<{ phoneNumber: string; friendlyName: string }>>([]);
+  const [suggestedNumbers, setSuggestedNumbers] = useState<Array<{ phoneNumber: string; friendlyName: string }>>([]);
+  const [suggestedLocation, setSuggestedLocation] = useState<{ city: string; state: string } | null>(null);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [selectedNumber, setSelectedNumber] = useState('');
   const [forwardToNumber, setForwardToNumber] = useState('');
   const [searching, setSearching] = useState(false);
   const [buying, setBuying] = useState(false);
+
+  // Auto-fetch suggested numbers when modal opens
+  useEffect(() => {
+    const fetchSuggestions = async () => {
+      setLoadingSuggestions(true);
+      try {
+        const res = await fetch('/api/phone/smart-search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ siteId }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          setSuggestedNumbers(data.numbers || []);
+          setSuggestedLocation({ city: data.city, state: data.state });
+        }
+      } catch (error) {
+        console.error('Error fetching suggestions:', error);
+        // Don't show error - just silently fail, user can still search manually
+      } finally {
+        setLoadingSuggestions(false);
+      }
+    };
+
+    fetchSuggestions();
+  }, [siteId]);
 
   const handleSearch = async () => {
     if (!areaCode.trim()) {
@@ -344,10 +374,54 @@ function TwilioPhoneModal({ siteId, onClose, onSuccess }: { siteId: string; onCl
         overflow: 'auto'
       }}>
         <h2 style={{ marginTop: 0 }}>Buy Phone Number from Twilio</h2>
-        <div style={{ marginBottom: '1rem' }}>
-          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-            Area Code
-          </label>
+        
+        {/* Suggested Numbers Section */}
+        {loadingSuggestions && (
+          <div style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: '#f9f9f9', borderRadius: '6px', textAlign: 'center' }}>
+            Loading suggestions...
+          </div>
+        )}
+
+        {!loadingSuggestions && suggestedNumbers.length > 0 && suggestedLocation && (
+          <div style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: '#e8f5e9', borderRadius: '6px', border: '1px solid #c8e6c9' }}>
+            <div style={{ marginBottom: '0.75rem', fontWeight: '600', color: '#2e7d32' }}>
+              ✨ Suggested for {suggestedLocation.city}, {suggestedLocation.state}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '0.5rem' }}>
+              {suggestedNumbers.map((n) => (
+                <button
+                  key={n.phoneNumber}
+                  onClick={() => {
+                    setSelectedNumber(n.phoneNumber);
+                    setNumbers([n]); // Set as the selected number
+                  }}
+                  style={{
+                    padding: '0.75rem',
+                    border: selectedNumber === n.phoneNumber ? '2px solid #28a745' : '1px solid #ddd',
+                    borderRadius: '6px',
+                    backgroundColor: selectedNumber === n.phoneNumber ? '#d4edda' : 'white',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    fontSize: '0.9rem',
+                  }}
+                >
+                  <div style={{ fontWeight: '500' }}>{n.phoneNumber}</div>
+                  {n.friendlyName && (
+                    <div style={{ fontSize: '0.75rem', color: '#666', marginTop: '0.25rem' }}>
+                      {n.friendlyName}
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Manual Search Section */}
+        <div style={{ marginBottom: '1rem', paddingTop: '1rem', borderTop: '1px solid #e0e0e0' }}>
+          <div style={{ marginBottom: '0.5rem', fontSize: '0.875rem', color: '#666' }}>
+            Or search by area code:
+          </div>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <input
               type="text"
@@ -374,24 +448,50 @@ function TwilioPhoneModal({ siteId, onClose, onSuccess }: { siteId: string; onCl
           </div>
         </div>
 
-        {numbers.length > 0 && (
+        {(numbers.length > 0 || selectedNumber) && (
           <>
             <div style={{ marginBottom: '1rem' }}>
               <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
                 Select Number
               </label>
-              <select
-                value={selectedNumber}
-                onChange={(e) => setSelectedNumber(e.target.value)}
-                style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
-              >
-                <option value="">Choose a number...</option>
-                {numbers.map((n) => (
-                  <option key={n.phoneNumber} value={n.phoneNumber}>
-                    {n.phoneNumber} {n.friendlyName ? `(${n.friendlyName})` : ''}
-                  </option>
-                ))}
-              </select>
+              {numbers.length > 1 ? (
+                <select
+                  value={selectedNumber}
+                  onChange={(e) => setSelectedNumber(e.target.value)}
+                  style={{ width: '100%', padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}
+                >
+                  <option value="">Choose a number...</option>
+                  {numbers.map((n) => (
+                    <option key={n.phoneNumber} value={n.phoneNumber}>
+                      {n.phoneNumber} {n.friendlyName ? `(${n.friendlyName})` : ''}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div style={{ padding: '0.75rem', backgroundColor: '#f9f9f9', borderRadius: '4px', border: '1px solid #ddd' }}>
+                  <strong>{selectedNumber || numbers[0]?.phoneNumber}</strong>
+                  {selectedNumber && (
+                    <button
+                      onClick={() => {
+                        setSelectedNumber('');
+                        setNumbers([]);
+                      }}
+                      style={{
+                        marginLeft: '0.5rem',
+                        padding: '0.25rem 0.5rem',
+                        fontSize: '0.75rem',
+                        backgroundColor: '#dc3545',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
             <div style={{ marginBottom: '1rem' }}>
               <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
@@ -410,7 +510,7 @@ function TwilioPhoneModal({ siteId, onClose, onSuccess }: { siteId: string; onCl
 
         <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
           <button onClick={onClose} style={{ padding: '0.5rem 1rem', cursor: 'pointer' }}>Cancel</button>
-          {numbers.length > 0 && (
+          {(numbers.length > 0 || selectedNumber) && (
             <button
               onClick={handleBuy}
               disabled={buying || !selectedNumber || !forwardToNumber.trim()}
@@ -1374,7 +1474,7 @@ export default function SiteFactoryDetailPage() {
               </span>
             )}
           </div>
-          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
             <button 
               onClick={() => setShowManualPhoneModal(true)}
               style={{ padding: '0.5rem 1rem', cursor: 'pointer', backgroundColor: '#6c757d', color: 'white', border: 'none', borderRadius: '4px' }}
@@ -1393,6 +1493,14 @@ export default function SiteFactoryDetailPage() {
             >
               Buy from Ringba
             </button>
+            {site.trackingNumber && (
+              <button 
+                onClick={() => router.push(`/sites/${siteId}/phone`)}
+                style={{ padding: '0.5rem 1rem', cursor: 'pointer', backgroundColor: '#ffc107', color: '#000', border: 'none', borderRadius: '4px', fontWeight: '500' }}
+              >
+                ⚙️ Configure Call Routing
+              </button>
+            )}
           </div>
         </div>
 
