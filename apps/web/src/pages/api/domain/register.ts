@@ -14,9 +14,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const { siteId, domain } = req.body as {
+    const { siteId, domain, contactInfo: providedContactInfo } = req.body as {
       siteId: string;
       domain: string;
+      contactInfo?: {
+        firstName: string;
+        lastName: string;
+        email: string;
+        phone: string;
+        address1: string;
+        city: string;
+        state: string;
+        zip: string;
+        country: string;
+      };
     };
 
     if (!siteId || !domain) {
@@ -32,27 +43,35 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(404).json({ error: "Site not found" });
     }
 
-    // For now, use default contact info (should be configurable)
-    // In production, you'd want to store contact info per site or use a default
-    const contactInfo = {
-      firstName: "Admin",
-      lastName: "User",
-      email: site.email || "admin@example.com",
-      phone: "+1234567890",
-      address1: "123 Main St",
-      city: site.city,
-      state: site.state,
-      zip: "12345",
+    // Use provided contact info or fall back to default (Colin Merrill)
+    const contactInfo = providedContactInfo || {
+      firstName: "Colin",
+      lastName: "Merrill",
+      email: "colin.merrill1@gmail.com",
+      phone: "+1.2627770909",
+      address1: "12605 w north ave",
+      city: "brookfield",
+      state: "wi",
+      zip: "53005",
       country: "US",
     };
 
     const result = await registerDomain(domain, 1, contactInfo);
 
     if (!result.success) {
+      // Use the error message from registerDomain (already parsed)
+      const errorMessage = result.error || "Domain registration failed";
+
+      console.error("[domain-register] Registration failed:", {
+        domain,
+        error: errorMessage,
+        raw: result.raw,
+      });
+
       return res.status(500).json({
         status: "error",
         domain,
-        error: "Domain registration failed",
+        error: errorMessage,
         raw: result.raw,
       });
     }

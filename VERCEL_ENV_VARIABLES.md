@@ -53,10 +53,16 @@ VOIPMS_API_TOKEN="aIdPNHNFUkFV5JRNb2JPU29FcHBnM1FpOGZSbJJobnNUR2JYQ0xzduFFTS10="
 GOOGLE_SERVICE_ACCOUNT_JSON='{"type":"service_account",...}'  # Single-line JSON
 
 # Domain Registration (Namecheap)
+# Required for domain availability checks and registration
 NAMECHEAP_API_USER="your-namecheap-api-user"
 NAMECHEAP_API_KEY="your-namecheap-api-key"
 NAMECHEAP_USERNAME="your-namecheap-username"
 NAMECHEAP_CLIENT_IP="your-public-ip-address"
+
+# Namecheap Proxy (Required when using Cloudways proxy)
+# Set these if routing through a Cloudways proxy to bypass IP whitelisting
+NAMECHEAP_PROXY_URL="https://your-cloudways-site.com/namecheap-proxy.php"
+NAMECHEAP_PROXY_SECRET="your-random-secret-string"
 
 # SearchAtlas (keyword research)
 SEARCHATLAS_API_KEY="your-searchatlas-key"

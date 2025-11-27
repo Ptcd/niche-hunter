@@ -123,6 +123,43 @@ export async function checkDomainAvailability(
 }
 
 /**
+ * Validate phone number format for Namecheap API
+ * US format: +1.XXXXXXXXXX (e.g., +1.8135551234)
+ */
+function validatePhone(phone: string, country: string): { valid: boolean; error?: string } {
+  if (country === 'US' || country === 'CA') {
+    // Namecheap requires format: +1.XXXXXXXXXX
+    const phoneRegex = /^\+1\.\d{10}$/;
+    if (!phoneRegex.test(phone)) {
+      return {
+        valid: false,
+        error: 'Phone number must be in format +1.XXXXXXXXXX (e.g., +1.8135551234)',
+      };
+    }
+  }
+  return { valid: true };
+}
+
+/**
+ * Extract error message from Namecheap XML response
+ */
+function extractErrorMessage(xml: string): string | null {
+  // Try to match <Error>...</Error> tags
+  const errorMatch = xml.match(/<Error[^>]*>([^<]+)<\/Error>/);
+  if (errorMatch) {
+    return errorMatch[1].trim();
+  }
+  
+  // Try to match Error attribute or text
+  const generalErrorMatch = xml.match(/Error[^>]*>([^<]+)/i);
+  if (generalErrorMatch) {
+    return generalErrorMatch[1].trim();
+  }
+  
+  return null;
+}
+
+/**
  * Register a domain via Namecheap API
  */
 export async function registerDomain(
@@ -139,7 +176,7 @@ export async function registerDomain(
     zip: string;
     country: string;
   }
-): Promise<{ success: boolean; raw: any }> {
+): Promise<{ success: boolean; raw: any; error?: string }> {
   // Check credentials based on mode
   if (USE_PROXY) {
     if (!NAMECHEAP_PROXY_URL || !NAMECHEAP_PROXY_SECRET) {
@@ -149,6 +186,16 @@ export async function registerDomain(
     if (!NAMECHEAP_API_USER || !NAMECHEAP_API_KEY || !NAMECHEAP_CLIENT_IP) {
       throw new Error("Namecheap API credentials not configured");
     }
+  }
+
+  // Validate phone format
+  const phoneValidation = validatePhone(contactInfo.phone, contactInfo.country);
+  if (!phoneValidation.valid) {
+    return {
+      success: false,
+      raw: null,
+      error: phoneValidation.error || 'Invalid phone number format',
+    };
   }
 
   const cleanDomain = domain.replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0].toLowerCase();
@@ -209,16 +256,23 @@ export async function registerDomain(
       return { success: true, raw: text };
     }
 
-    // Check for errors
-    if (text.includes("<Error>")) {
-      console.error("[namecheapClient] Registration error:", text);
-      return { success: false, raw: text };
+    // Check for errors and extract message
+    const errorMessage = extractErrorMessage(text);
+    if (errorMessage) {
+      console.error("[namecheapClient] Registration error:", errorMessage, text);
+      return { success: false, raw: text, error: errorMessage };
     }
 
-    return { success: false, raw: text };
+    // If no clear success or error, check status
+    if (text.includes('Status="ERROR"') || text.includes('Status="FAIL"')) {
+      const extractedError = extractErrorMessage(text) || 'Domain registration failed';
+      return { success: false, raw: text, error: extractedError };
+    }
+
+    return { success: false, raw: text, error: 'Unknown registration error' };
   } catch (err: any) {
     console.error("[namecheapClient] Registration request failed:", err);
-    return { success: false, raw: err.message };
+    return { success: false, raw: err.message, error: err.message || 'Request failed' };
   }
 }
 

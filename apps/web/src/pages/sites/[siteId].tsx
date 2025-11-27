@@ -656,6 +656,19 @@ function DomainModal({
   const [suggestions] = useState<string[]>(() => generateDomainSuggestions(city, state, keywords, niche));
   const [suggestionAvailability, setSuggestionAvailability] = useState<Record<string, 'unknown' | 'available' | 'taken' | 'error' | 'checking'>>({});
   const [checkingAll, setCheckingAll] = useState(false);
+  
+  // Default contact info (Colin Merrill)
+  const defaultContactInfo = {
+    firstName: 'Colin',
+    lastName: 'Merrill',
+    email: 'colin.merrill1@gmail.com',
+    phone: '+1.2627770909',
+    address1: '12605 w north ave',
+    city: 'brookfield',
+    state: 'wi',
+    zip: '53005',
+    country: 'US',
+  };
 
   const handleCheck = async () => {
     if (!domain.trim()) {
@@ -746,7 +759,7 @@ function DomainModal({
       const res = await fetch('/api/domain/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ siteId, domain }),
+        body: JSON.stringify({ siteId, domain, contactInfo: defaultContactInfo }),
       });
 
       if (res.ok) {
