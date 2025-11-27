@@ -7,6 +7,12 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { prisma } from "@niche-hunter/db";
 
+interface IvrOption {
+  digit: string;
+  label: string;
+  forwardTo: string;
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -50,8 +56,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Parse IVR options
-    const ivrOptions = Array.isArray(site.ivrOptions) ? site.ivrOptions : [];
-    const selectedOption = ivrOptions.find((opt: any) => opt.digit === digits);
+    const ivrOptions = (Array.isArray(site.ivrOptions) ? site.ivrOptions : []) as IvrOption[];
+    const selectedOption = ivrOptions.find((opt) => opt.digit === digits);
 
     if (!selectedOption || !selectedOption.forwardTo) {
       // Invalid selection, play error and redirect
