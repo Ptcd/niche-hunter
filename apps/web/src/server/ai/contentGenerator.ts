@@ -214,6 +214,25 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
     }
   }
 
+  // Generate SEO meta title and description
+  const seoMeta = await generateSEOMeta(
+    page.focusKeyword,
+    page.pageType,
+    brand.name,
+    context.city,
+    context.state,
+    model
+  );
+
+  // Update page with SEO meta
+  await prisma.sitePage.update({
+    where: { id: pageId },
+    data: {
+      titleTag: seoMeta.title,
+      seoDescription: seoMeta.description,
+    },
+  });
+
   // Generate schema markup
   const faqItems = extractFAQFromContent(sections.map(s => s.content).join(' '));
   const schemaOptions: SchemaOptions = {
@@ -239,8 +258,8 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
   const html = buildPageHtml(
     sections,
     brand,
-    page.titleTag || page.h1,
-    page.seoDescription || undefined,
+    seoMeta.title,
+    seoMeta.description,
     schemaMarkup
   );
 
@@ -253,6 +272,99 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
     html,
     wordCount,
   };
+}
+
+/**
+ * Generate SEO meta title and description using GPT
+ */
+async function generateSEOMeta(
+  focusKeyword: string,
+  pageType: PageType,
+  brandName: string,
+  city: string,
+  state: string,
+  model: string = 'gpt-4o'
+): Promise<{ title: string; description: string }> {
+  const systemPrompt = `
+You are an expert SEO copywriter specializing in local business optimization.
+Generate compelling, keyword-focused SEO meta tags that drive clicks and conversions.
+`;
+
+  const pageTypeName = pageType === PageType.HOME ? 'homepage' :
+                       pageType === PageType.CORE_SERVICE ? 'service page' :
+                       pageType === PageType.CITY ? 'city page' :
+                       pageType === PageType.ABOUT ? 'about page' :
+                       pageType === PageType.CONTACT ? 'contact page' :
+                       'page';
+
+  const userPrompt = `
+Generate SEO meta tags for a ${pageTypeName}:
+
+- Focus keyword: "${focusKeyword}"
+- Business: ${brandName} in ${city}, ${state}
+
+CRITICAL REQUIREMENTS:
+1. Title: Maximum 60 characters, MUST contain "${focusKeyword}"
+2. Description: Maximum 160 characters, MUST START with "${focusKeyword}"
+3. Description should include a call-to-action (e.g., "Call today", "Get a free quote")
+4. Make it compelling and click-worthy
+5. Include location (${city}, ${state}) naturally
+
+Output format (JSON only, no markdown):
+{
+  "title": "exact title here",
+  "description": "exact description here"
+}
+`;
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model,
+      temperature: 0.7,
+      max_tokens: 200,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt.trim() },
+      ],
+      response_format: { type: 'json_object' },
+    });
+
+    const content = completion.choices[0]?.message?.content;
+    if (!content) {
+      throw new Error('GPT returned empty content');
+    }
+
+    const parsed = JSON.parse(content);
+    let title = parsed.title || `${focusKeyword} | ${brandName}`;
+    let description = parsed.description || `${focusKeyword} services in ${city}, ${state}. Call ${brandName} today!`;
+
+    // Enforce requirements
+    // Title must contain focus keyword
+    if (!title.toLowerCase().includes(focusKeyword.toLowerCase())) {
+      title = `${focusKeyword} | ${brandName}`;
+    }
+    // Truncate title to 60 chars
+    if (title.length > 60) {
+      title = title.substring(0, 57) + '...';
+    }
+
+    // Description must start with focus keyword
+    if (!description.toLowerCase().startsWith(focusKeyword.toLowerCase())) {
+      description = `${focusKeyword} ${description}`;
+    }
+    // Truncate description to 160 chars
+    if (description.length > 160) {
+      description = description.substring(0, 157) + '...';
+    }
+
+    return { title, description };
+  } catch (error: any) {
+    console.error(`[generateSEOMeta] Error:`, error);
+    // Fallback meta
+    const fallbackTitle = `${focusKeyword} | ${brandName}`.substring(0, 60);
+    const fallbackDesc = `${focusKeyword} services in ${city}, ${state}. Professional service by ${brandName}. Call today for a free quote!`.substring(0, 160);
+    return { title: fallbackTitle, description: fallbackDesc };
+  }
 }
 
 /**

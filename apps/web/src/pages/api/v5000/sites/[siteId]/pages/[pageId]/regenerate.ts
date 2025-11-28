@@ -41,8 +41,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Get model from request body, default to 'gpt-4o'
     const { model = 'gpt-4o' } = req.body as { model?: string };
 
-    // Generate new content
+    // Generate new content (this also updates titleTag and seoDescription)
     const generated = await generatePageContent(pageId, model);
+
+    // Reload page to get updated SEO meta
+    const updatedPage = await prisma.sitePage.findUnique({
+      where: { id: pageId },
+      select: {
+        titleTag: true,
+        seoDescription: true,
+      },
+    });
 
     // Update page with new content
     // Preserve humanNotes and htmlEdited
@@ -67,6 +76,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       html: generated.html,
       wordCount: generated.wordCount,
       sections: generated.sections,
+      titleTag: updatedPage?.titleTag,
+      seoDescription: updatedPage?.seoDescription,
       model,
     });
   } catch (err: any) {
