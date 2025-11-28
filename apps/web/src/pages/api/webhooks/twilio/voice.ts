@@ -100,18 +100,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ? `${baseUrl}/api/webhooks/twilio/call-status`
         : `/api/webhooks/twilio/call-status`;
 
+      // Ensure phone number is in E.164 format with + prefix
+      const forwardNumber = site.forwardToNumber.startsWith('+') 
+        ? site.forwardToNumber 
+        : `+${site.forwardToNumber.replace(/\D/g, '')}`;
+
       if (site.whisperEnabled && site.whisperMessage) {
         // Whisper mode: Play message to agent before connecting
         const whisperUrl = baseUrl 
           ? `${baseUrl}/api/webhooks/twilio/whisper?siteId=${site.id}&message=${encodeURIComponent(site.whisperMessage)}`
           : `/api/webhooks/twilio/whisper?siteId=${site.id}&message=${encodeURIComponent(site.whisperMessage)}`;
         twiml += `<Dial action="${callStatusUrl}" method="POST">`;
-        twiml += `<Number url="${whisperUrl}">${escapeXml(site.forwardToNumber)}</Number>`;
+        twiml += `<Number url="${whisperUrl}">${escapeXml(forwardNumber)}</Number>`;
         twiml += `</Dial>`;
       } else {
         // Direct mode: Simple forward
         twiml += `<Dial action="${callStatusUrl}" method="POST">`;
-        twiml += `<Number>${escapeXml(site.forwardToNumber)}</Number>`;
+        twiml += `<Number>${escapeXml(forwardNumber)}</Number>`;
         twiml += `</Dial>`;
       }
     }
