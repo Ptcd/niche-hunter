@@ -39,6 +39,10 @@ export default function PageEditor() {
   const [seoDescription, setSeoDescription] = useState('');
   const [htmlEdited, setHtmlEdited] = useState('');
   const [notesForGpt, setNotesForGpt] = useState('');
+  
+  // Audit state
+  const [auditing, setAuditing] = useState(false);
+  const [auditResult, setAuditResult] = useState<any>(null);
 
   useEffect(() => {
     if (pageId && typeof pageId === 'string') {
@@ -164,6 +168,29 @@ export default function PageEditor() {
     } catch (error) {
       console.error('Error approving page:', error);
       alert('Failed to approve page');
+    }
+  };
+
+  const handleAudit = async () => {
+    if (!siteId || !pageId || typeof siteId !== 'string' || typeof pageId !== 'string') return;
+    
+    setAuditing(true);
+    try {
+      const res = await fetch(`/api/v5000/sites/${siteId}/pages/${pageId}/audit`, {
+        method: 'POST',
+      });
+      
+      if (res.ok) {
+        const result = await res.json();
+        setAuditResult(result);
+      } else {
+        const error = await res.json();
+        alert(`Audit failed: ${error.error}`);
+      }
+    } catch (err: any) {
+      alert(`Error: ${err.message}`);
+    } finally {
+      setAuditing(false);
     }
   };
 
@@ -396,10 +423,136 @@ export default function PageEditor() {
             >
               {page.status === 'APPROVED' ? 'Already Approved' : 'Mark as Approved'}
             </button>
+
+            <button
+              onClick={handleAudit}
+              disabled={auditing}
+              style={{
+                padding: '0.75rem 1.5rem',
+                backgroundColor: auditing ? '#ccc' : '#17a2b8',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: auditing ? 'not-allowed' : 'pointer',
+                fontSize: '1rem',
+                marginLeft: '0.5rem',
+              }}
+            >
+              {auditing ? 'Auditing...' : 'Run SEO Audit'}
+            </button>
           </div>
         </div>
+
+        {/* Audit Results */}
+        {auditResult && (
+          <div style={{ marginTop: '2rem', border: '1px solid #ddd', borderRadius: '8px', padding: '1.5rem' }}>
+            <h2 style={{ marginTop: 0 }}>SEO Audit Results</h2>
+            
+            {/* Overall Status */}
+            <div style={{ marginBottom: '1.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
+                <span style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>Overall Status:</span>
+                <span
+                  style={{
+                    padding: '0.5rem 1rem',
+                    borderRadius: '4px',
+                    fontWeight: 'bold',
+                    backgroundColor:
+                      auditResult.overallStatus === 'ELITE' ? '#28a745' :
+                      auditResult.overallStatus === 'STRONG' ? '#17a2b8' :
+                      auditResult.overallStatus === 'NEEDS_WORK' ? '#ffc107' :
+                      '#dc3545',
+                    color: 'white',
+                  }}
+                >
+                  {auditResult.overallStatus}
+                </span>
+              </div>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div>
+                  <strong>Quality Score:</strong> {auditResult.scores.quality}/100
+                </div>
+                <div>
+                  <strong>Competitive Edge:</strong> {auditResult.scores.competitiveEdge}/100
+                </div>
+              </div>
+            </div>
+
+            {/* Hard Gates */}
+            <div style={{ marginBottom: '1.5rem' }}>
+              <h3 style={{ marginBottom: '0.5rem' }}>Hard Gates</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem' }}>
+                {Object.entries(auditResult.hardGates).map(([gate, status]) => (
+                  <div key={gate} style={{ padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}>
+                    <div style={{ fontSize: '0.875rem', color: '#666' }}>{gate.replace('G', 'Gate ')}</div>
+                    <div
+                      style={{
+                        fontWeight: 'bold',
+                        color:
+                          status === 'PASS' ? '#28a745' :
+                          status === 'WARN' ? '#ffc107' :
+                          '#dc3545',
+                      }}
+                    >
+                      {status}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Priority Issues */}
+            {auditResult.issues && auditResult.issues.length > 0 && (
+              <div>
+                <h3 style={{ marginBottom: '0.5rem' }}>Priority Issues ({auditResult.issues.length})</h3>
+                <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                  {auditResult.issues.map((issue: any, idx: number) => (
+                    <div
+                      key={idx}
+                      style={{
+                        marginBottom: '1rem',
+                        padding: '1rem',
+                        border: '1px solid #ddd',
+                        borderRadius: '4px',
+                        borderLeft: `4px solid ${
+                          issue.severity === 'high' ? '#dc3545' :
+                          issue.severity === 'medium' ? '#ffc107' :
+                          '#17a2b8'
+                        }`,
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                        <span style={{ fontWeight: 'bold' }}>{issue.id}</span>
+                        <span
+                          style={{
+                            padding: '0.25rem 0.5rem',
+                            borderRadius: '4px',
+                            fontSize: '0.875rem',
+                            backgroundColor:
+                              issue.severity === 'high' ? '#dc3545' :
+                              issue.severity === 'medium' ? '#ffc107' :
+                              '#17a2b8',
+                            color: 'white',
+                          }}
+                        >
+                          {issue.severity}
+                        </span>
+                      </div>
+                      <div style={{ marginBottom: '0.5rem', color: '#666' }}>{issue.message}</div>
+                      <div style={{ padding: '0.5rem', backgroundColor: '#f8f9fa', borderRadius: '4px', fontSize: '0.875rem' }}>
+                        <strong>Fix:</strong> {issue.suggestedAction}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
 }
+
 

@@ -14,3 +14,4 @@ export * from './integrations/google-sheets';
 export * from './integrations/wordpress';
 export * from './integrations/twilio';
 export { generatePageContent } from './content/gpt-generator';
+export * from './audit';
