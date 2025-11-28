@@ -8,7 +8,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { prisma } from "@niche-hunter/db";
 import { searchPhoneNumbersByAreaCodes, searchPhoneNumbersByLocation } from "../../../lib/twilioClient";
-import { getAreaCodesForZip } from "../../../lib/zipToAreaCode";
+import { getAreaCodesForCityState, getAreaCodesForZip } from "../../../lib/zipToAreaCode";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
@@ -24,7 +24,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: "Missing siteId" });
     }
 
-    // Look up site to get city, state, and batchId
+    // Look up site to get city and state
     const site = await prisma.site.findUnique({
       where: { id: siteId },
       select: {
@@ -48,38 +48,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let zip: string | null = null;
     let areaCodes: string[] = [];
 
-    // Try to get ZIP from batch scans
-    if (site.batchId) {
-      try {
-        // Get a scan from the batch to extract ZIP
-        const scan = await prisma.scan.findFirst({
-          where: {
-            batchId: site.batchId,
-            city: site.city,
-            state: site.state,
-            zip: { not: null },
-          },
-          select: {
-            zip: true,
-          },
-        });
-
-        if (scan?.zip) {
-          zip = scan.zip;
-          // Look up area codes for this ZIP
-          areaCodes = await getAreaCodesForZip(scan.zip);
-          
-          if (areaCodes.length > 0) {
-            // Search by area codes (prioritized local numbers)
-            numbers = await searchPhoneNumbersByAreaCodes(areaCodes, 10);
-          }
-        }
-      } catch (err: any) {
-        console.warn("[phone-smart-search] Failed to get ZIP from batch:", err.message);
-      }
+    // First, try to get area codes directly from city/state mapping
+    areaCodes = getAreaCodesForCityState(site.city, site.state);
+    
+    if (areaCodes.length > 0) {
+      // Search by area codes (prioritized local numbers)
+      numbers = await searchPhoneNumbersByAreaCodes(areaCodes, 10);
     }
 
-    // Fallback to location-based search if no area codes found
+    // Fallback to location-based search if no area codes found or no numbers returned
     if (numbers.length === 0) {
       numbers = await searchPhoneNumbersByLocation(
         site.city,

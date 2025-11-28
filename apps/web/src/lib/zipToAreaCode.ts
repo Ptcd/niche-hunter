@@ -45,6 +45,15 @@ export async function getAreaCodesForZip(zip: string): Promise<string[]> {
 }
 
 /**
+ * Get area codes for a city/state combination
+ * This uses our curated mapping of major metros and their area codes.
+ * For smaller cities, falls back to state-level common area codes.
+ */
+export function getAreaCodesForCityState(city: string, state: string): string[] {
+  return getAreaCodesForLocation(city, state);
+}
+
+/**
  * Map city/state to area codes
  * This is a curated mapping of major metros and their area codes.
  * For smaller cities, falls back to state-level common area codes.
