@@ -15,12 +15,16 @@ function getVoiceWebhookUrl(): string {
   const envUrl = process.env.TWILIO_VOICE_WEBHOOK_URL;
   if (envUrl) return envUrl;
   
-  // Fallback: construct from Vercel URL or use relative path
-  const baseUrl = process.env.VERCEL_URL 
-    ? `https://${process.env.VERCEL_URL}`
-    : process.env.NEXT_PUBLIC_APP_URL || '';
+  // Prefer production domain (NEXT_PUBLIC_APP_URL) over preview deployment URL (VERCEL_URL)
+  // Preview deployments require auth, but webhooks need to be publicly accessible
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL 
+    || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '');
   
-  return baseUrl ? `${baseUrl}/api/webhooks/twilio/voice` : '/api/webhooks/twilio/voice';
+  if (!baseUrl) {
+    throw new Error('TWILIO_VOICE_WEBHOOK_URL or NEXT_PUBLIC_APP_URL must be set');
+  }
+  
+  return `${baseUrl}/api/webhooks/twilio/voice`;
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
