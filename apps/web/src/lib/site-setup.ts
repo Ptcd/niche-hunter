@@ -374,8 +374,8 @@ export async function buildSkeletonsForPage(pageId: string): Promise<void> {
   // Build blueprint context
   const context: BlueprintContext = {
     niche: site.niche.slug,
-    city: siteData.city,
-    state: siteData.state,
+    city: site.city,
+    state: site.state,
     focusKeyword: page.focusKeyword || '',
     supportingKeywords: page.supportingKeywords || [],
     keywordRoles: keywordRolesMap,
