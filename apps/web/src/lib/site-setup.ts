@@ -290,3 +290,145 @@ export async function generateContentSkeletons(siteId: string): Promise<void> {
   }
 }
 
+/**
+ * Build content skeletons for a single page
+ * Used when regenerating existing pages that don't have skeletons
+ */
+export async function buildSkeletonsForPage(pageId: string): Promise<void> {
+  // Load page with site data
+  const page = await prisma.sitePage.findUnique({
+    where: { id: pageId },
+    include: {
+      site: {
+        include: {
+          niche: true,
+        },
+      },
+    },
+  });
+
+  if (!page || !page.site) {
+    throw new Error('Page or site not found');
+  }
+
+  const site = page.site;
+
+  if (!site.batchId) {
+    throw new Error('Site has no batch');
+  }
+
+  // Load batch keywords for this city
+  const batchKeywords = await prisma.keywordV5000.findMany({
+    where: {
+      batchId: site.batchId,
+      isSkipped: false,
+      city: {
+        city: site.city,
+        state: site.state,
+      },
+    },
+    include: {
+      nicheKeyword: true,
+      city: true,
+    },
+  });
+
+  // Classify keywords into roles
+  const keywordsForClassification: KeywordForClassification[] = batchKeywords.map((kw) => ({
+    id: kw.id,
+    keyword: kw.nicheKeyword.keyword,
+    localizedQuery: kw.localizedQuery || kw.nicheKeyword.keyword,
+    keywordType: kw.keywordType,
+    city: kw.city.city,
+    state: kw.city.state,
+  }));
+
+  // Classify in batches of 50
+  const batchSize = 50;
+  const classifiedKeywords: { [keywordId: string]: KeywordRole | null } = {};
+
+  for (let i = 0; i < keywordsForClassification.length; i += batchSize) {
+    const batch = keywordsForClassification.slice(i, i + batchSize);
+    const classified = await classifyKeywords(batch, site.niche.name, siteData.city, siteData.state);
+    
+    for (const result of classified) {
+      classifiedKeywords[result.id] = result.role;
+    }
+  }
+
+  // Extract keyword roles map
+  const keywordRolesMap = new Map<KeywordRole, string[]>();
+  for (const kw of batchKeywords) {
+    const role = (kw.keywordRole || classifiedKeywords[kw.id]) as KeywordRole | null;
+    if (role) {
+      if (!keywordRolesMap.has(role)) {
+        keywordRolesMap.set(role, []);
+      }
+      keywordRolesMap.get(role)!.push(kw.nicheKeyword.keyword);
+    }
+  }
+
+  // Map PageType enum to blueprint page type
+  const blueprintPageType = mapPageTypeToBlueprintType(page.pageType);
+
+  // Build blueprint context
+  const context: BlueprintContext = {
+    niche: site.niche.slug,
+    city: siteData.city,
+    state: siteData.state,
+    focusKeyword: page.focusKeyword || '',
+    supportingKeywords: page.supportingKeywords || [],
+    keywordRoles: keywordRolesMap,
+  };
+
+  // Delete existing skeletons for this page
+  await prisma.contentSkeleton.deleteMany({
+    where: { sitePageId: pageId },
+  });
+
+  // Apply blueprint and create skeletons
+  const skeletons = applyBlueprintToPage(
+    site.niche.slug,
+    blueprintPageType,
+    context
+  );
+
+  // Create ContentSkeleton records
+  for (const skeleton of skeletons) {
+    await prisma.contentSkeleton.create({
+      data: {
+        sitePageId: pageId,
+        sectionId: skeleton.sectionId,
+        heading: skeleton.heading,
+        purpose: skeleton.purpose,
+        requiredKeywordRoles: skeleton.requiredKeywordRoles,
+        optionalKeywordRoles: skeleton.optionalKeywordRoles,
+        localHints: skeleton.localHints,
+        styleVariant: skeleton.styleVariant,
+        targetWordCount: skeleton.targetWordCount,
+        minWords: skeleton.minWords,
+        maxWords: skeleton.maxWords,
+        orderIndex: skeleton.orderIndex,
+      },
+    });
+  }
+}
+
+/**
+ * Map PageType enum to blueprint page type string
+ */
+function mapPageTypeToBlueprintType(pageType: string): string {
+  const mapping: { [key: string]: string } = {
+    'HOME': 'home',
+    'CORE_SERVICE': 'primary_service',
+    'PRIMARY_SERVICE': 'primary_service',
+    'CITY': 'city_page',
+    'SUPPORT': 'primary_service', // Support pages use service blueprint
+    'ABOUT': 'about',
+    'CONTACT': 'contact',
+    'LEGAL': 'legal',
+  };
+  
+  return mapping[pageType] || 'primary_service';
+}
+

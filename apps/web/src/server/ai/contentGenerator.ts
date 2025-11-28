@@ -14,6 +14,7 @@ import { injectInternalLinks, addRelatedServicesSection, PageLink } from '../../
 import { getExternalLinksForPrompt } from '../../lib/externalResources';
 import { generateSchemaMarkup, extractFAQFromContent, SchemaOptions } from '../../lib/schemaGenerator';
 import { generatePageStrategy, PageSpec } from './pageStrategy';
+import { buildSkeletonsForPage } from '../../lib/site-setup';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -134,6 +135,30 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
   // Get external resources for this page
   const pageKeywords = [page.focusKeyword, ...(page.supportingKeywords || [])];
   const externalResources = getExternalLinksForPrompt(context.niche, pageKeywords, 2);
+
+  // If no skeletons exist, build them from blueprints first
+  if (page.skeletons.length === 0) {
+    console.log(`[generatePageContent] No skeletons found for page ${pageId}, building from blueprints...`);
+    try {
+      await buildSkeletonsForPage(pageId);
+      // Reload page with skeletons
+      const reloadedPage = await prisma.sitePage.findUnique({
+        where: { id: pageId },
+        include: {
+          skeletons: {
+            orderBy: { orderIndex: 'asc' },
+          },
+        },
+      });
+      if (reloadedPage) {
+        page.skeletons = reloadedPage.skeletons;
+        console.log(`[generatePageContent] Built ${page.skeletons.length} skeletons for page`);
+      }
+    } catch (error) {
+      console.error(`[generatePageContent] Failed to build skeletons:`, error);
+      // Continue with fallback generation
+    }
+  }
 
   // Generate sections based on ContentSkeleton
   const sections: Section[] = [];
