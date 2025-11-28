@@ -82,70 +82,243 @@ function LeadsPanel({ siteId }: { siteId: string }) {
 function KeywordsPanel({ 
   keywordsWithVolume, 
   totalKeywords,
-  batchId 
+  batchId,
+  siteId 
 }: { 
   keywordsWithVolume?: Array<{ keyword: string; volume: number }>;
   totalKeywords?: number;
   batchId?: string;
+  siteId?: string;
 }) {
+  const [showModal, setShowModal] = useState(false);
+  const [allKeywords, setAllKeywords] = useState<Array<{ keyword: string; volume: number; localizedQuery?: string }>>([]);
+  const [loading, setLoading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortBy, setSortBy] = useState<'volume' | 'keyword'>('volume');
+
+  const fetchAllKeywords = async () => {
+    if (!siteId) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/v5000/sites/${siteId}/keywords`);
+      const data = await res.json();
+      setAllKeywords(data.keywords || []);
+    } catch (err) {
+      console.error('Failed to fetch keywords:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleOpenModal = () => {
+    setShowModal(true);
+    if (allKeywords.length === 0) {
+      fetchAllKeywords();
+    }
+  };
+
+  const filteredKeywords = allKeywords.filter(kw => 
+    kw.keyword.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    kw.localizedQuery?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const sortedKeywords = [...filteredKeywords].sort((a, b) => {
+    if (sortBy === 'volume') {
+      return b.volume - a.volume;
+    }
+    return (a.keyword || a.localizedQuery || '').localeCompare(b.keyword || b.localizedQuery || '');
+  });
+
   if (!keywordsWithVolume || keywordsWithVolume.length === 0) {
     return null;
   }
 
   return (
-    <div style={{ border: '1px solid #ddd', borderRadius: '8px', padding: '1.5rem', marginBottom: '2rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-        <h2 style={{ marginTop: 0, marginBottom: 0 }}>Keywords</h2>
-        {totalKeywords && (
-          <span style={{ fontSize: '0.875rem', color: '#666' }}>
-            {totalKeywords} total keywords in batch
-          </span>
-        )}
-      </div>
-      
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
-        {keywordsWithVolume.map((kw, idx) => (
-          <div
-            key={idx}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              padding: '0.5rem 0.75rem',
-              backgroundColor: '#f0f8ff',
-              border: '1px solid #0070f3',
-              borderRadius: '6px',
-              fontSize: '0.875rem',
-            }}
-          >
-            <span style={{ fontWeight: '500', color: '#0070f3' }}>{kw.keyword}</span>
-            <span
+    <>
+      <div style={{ border: '1px solid #ddd', borderRadius: '8px', padding: '1.5rem', marginBottom: '2rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+          <h2 style={{ marginTop: 0, marginBottom: 0 }}>Keywords</h2>
+          {totalKeywords && (
+            <span style={{ fontSize: '0.875rem', color: '#666' }}>
+              {totalKeywords} total keywords in batch
+            </span>
+          )}
+        </div>
+        
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
+          {keywordsWithVolume.map((kw, idx) => (
+            <div
+              key={idx}
               style={{
-                padding: '0.125rem 0.5rem',
-                backgroundColor: '#0070f3',
-                color: 'white',
-                borderRadius: '4px',
-                fontSize: '0.75rem',
-                fontWeight: '600',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                padding: '0.5rem 0.75rem',
+                backgroundColor: '#f0f8ff',
+                border: '1px solid #0070f3',
+                borderRadius: '6px',
+                fontSize: '0.875rem',
               }}
             >
-              {kw.volume.toLocaleString()}/mo
-            </span>
-          </div>
-        ))}
-      </div>
-      
-      {batchId && (
-        <div style={{ marginTop: '1rem', fontSize: '0.875rem', color: '#666' }}>
-          <a 
-            href={`/v5000/batches/${batchId}`}
-            style={{ color: '#0070f3', textDecoration: 'none' }}
+              <span style={{ fontWeight: '500', color: '#0070f3' }}>{kw.keyword}</span>
+              <span
+                style={{
+                  padding: '0.125rem 0.5rem',
+                  backgroundColor: '#0070f3',
+                  color: 'white',
+                  borderRadius: '4px',
+                  fontSize: '0.75rem',
+                  fontWeight: '600',
+                }}
+              >
+                {kw.volume.toLocaleString()}/mo
+              </span>
+            </div>
+          ))}
+        </div>
+        
+        <div style={{ marginTop: '1rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
+          <button
+            onClick={handleOpenModal}
+            style={{
+              padding: '0.5rem 1rem',
+              backgroundColor: '#0070f3',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '0.875rem',
+              fontWeight: '500',
+            }}
           >
-            View full batch →
-          </a>
+            View All Keywords ({totalKeywords || 0})
+          </button>
+          {batchId && (
+            <a 
+              href={`/v5000/batches/${batchId}`}
+              style={{ color: '#0070f3', textDecoration: 'none', fontSize: '0.875rem' }}
+            >
+              View full batch →
+            </a>
+          )}
+        </div>
+      </div>
+
+      {/* Full Keywords Modal */}
+      {showModal && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '2rem',
+          }}
+          onClick={() => setShowModal(false)}
+        >
+          <div
+            style={{
+              backgroundColor: 'white',
+              borderRadius: '8px',
+              padding: '2rem',
+              maxWidth: '900px',
+              width: '100%',
+              maxHeight: '80vh',
+              overflow: 'auto',
+              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <h2 style={{ margin: 0 }}>All Keywords ({totalKeywords || 0})</h2>
+              <button
+                onClick={() => setShowModal(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '1.5rem',
+                  cursor: 'pointer',
+                  color: '#666',
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Search and Sort Controls */}
+            <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', alignItems: 'center' }}>
+              <input
+                type="text"
+                placeholder="Search keywords..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                style={{
+                  flex: 1,
+                  padding: '0.5rem',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  fontSize: '0.875rem',
+                }}
+              />
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as 'volume' | 'keyword')}
+                style={{
+                  padding: '0.5rem',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  fontSize: '0.875rem',
+                }}
+              >
+                <option value="volume">Sort by Volume</option>
+                <option value="keyword">Sort by Keyword</option>
+              </select>
+            </div>
+
+            {loading ? (
+              <div style={{ padding: '2rem', textAlign: 'center' }}>Loading keywords...</div>
+            ) : (
+              <div style={{ border: '1px solid #ddd', borderRadius: '4px', overflow: 'hidden' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#f5f5f5', borderBottom: '2px solid #ddd' }}>
+                      <th style={{ textAlign: 'left', padding: '0.75rem', fontWeight: '600' }}>Keyword</th>
+                      <th style={{ textAlign: 'right', padding: '0.75rem', fontWeight: '600' }}>Volume</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedKeywords.length === 0 ? (
+                      <tr>
+                        <td colSpan={2} style={{ padding: '2rem', textAlign: 'center', color: '#666' }}>
+                          No keywords found
+                        </td>
+                      </tr>
+                    ) : (
+                      sortedKeywords.map((kw, idx) => (
+                        <tr key={idx} style={{ borderBottom: '1px solid #eee' }}>
+                          <td style={{ padding: '0.75rem' }}>
+                            {kw.localizedQuery || kw.keyword}
+                          </td>
+                          <td style={{ textAlign: 'right', padding: '0.75rem', fontWeight: '500' }}>
+                            {kw.volume.toLocaleString()}/mo
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -1560,6 +1733,7 @@ export default function SiteFactoryDetailPage() {
         keywordsWithVolume={site.keywordsWithVolume}
         totalKeywords={site.batchStats?.totalKeywords}
         batchId={site.batch?.id}
+        siteId={siteId as string}
       />
 
       {/* Leads Section */}
