@@ -106,14 +106,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         : `+${site.forwardToNumber.replace(/\D/g, '')}`;
 
       if (site.whisperEnabled && site.whisperMessage) {
-        // Whisper mode: Play message to agent before connecting
-        // Build URL and escape & for XML attribute
+        // Whisper mode: Play message to agent when call is answered
+        // Use dial action callback to detect when answered, then play whisper
+        // The url on Number is called when the call to that number is answered
         const whisperUrlRaw = baseUrl 
           ? `${baseUrl}/api/webhooks/twilio/whisper?siteId=${site.id}&message=${encodeURIComponent(site.whisperMessage)}`
           : `/api/webhooks/twilio/whisper?siteId=${site.id}&message=${encodeURIComponent(site.whisperMessage)}`;
         // Escape & to &amp; for XML attributes
         const whisperUrl = whisperUrlRaw.replace(/&/g, '&amp;');
-        twiml += `<Dial action="${callStatusUrl}" method="POST">`;
+        // Use dial action to track status, but whisper plays via Number url when answered
+        const dialActionUrl = baseUrl 
+          ? `${baseUrl}/api/webhooks/twilio/dial-action?siteId=${site.id}`
+          : `/api/webhooks/twilio/dial-action?siteId=${site.id}`;
+        twiml += `<Dial action="${dialActionUrl}" method="POST">`;
         twiml += `<Number url="${whisperUrl}">${escapeXml(forwardNumber)}</Number>`;
         twiml += `</Dial>`;
       } else {
