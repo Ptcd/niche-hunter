@@ -26,11 +26,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const rawMessage = req.query.message as string || req.body.message as string || "New lead calling";
     const message = escapeXml(rawMessage);
 
-    // Return TwiML that plays the whisper message
+    // Return TwiML that plays the whisper message with a half-second pause before
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
+  <Pause length="0.5"/>
   <Say voice="alice">${message}</Say>
-  <Pause length="1"/>
 </Response>`;
 
     res.setHeader("Content-Type", "text/xml");
