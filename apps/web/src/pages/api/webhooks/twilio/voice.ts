@@ -7,6 +7,16 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { prisma } from "@niche-hunter/db";
 
+// Escape XML special characters for TwiML
+function escapeXml(unsafe: string): string {
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -57,17 +67,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (site.ivrEnabled && site.ivrGreeting && site.ivrOptions) {
       // IVR Mode: Play greeting and gather digits
       const ivrOptions = Array.isArray(site.ivrOptions) ? site.ivrOptions : [];
-      const greeting = site.ivrGreeting;
+      const greeting = escapeXml(site.ivrGreeting);
       
       // Build menu text from options
       const menuText = ivrOptions
-        .map((opt: any) => `Press ${opt.digit} for ${opt.label}`)
+        .map((opt: any) => `Press ${opt.digit} for ${escapeXml(opt.label || '')}`)
         .join(". ");
 
-      // Build full URL for IVR route
-      const baseUrl = process.env.VERCEL_URL 
-        ? `https://${process.env.VERCEL_URL}`
-        : process.env.NEXT_PUBLIC_APP_URL || '';
+      // Build full URL for IVR route - prefer production URL
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL 
+        || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '');
       const ivrRouteUrl = baseUrl 
         ? `${baseUrl}/api/webhooks/twilio/ivr-route?siteId=${site.id}`
         : `/api/webhooks/twilio/ivr-route?siteId=${site.id}`;
@@ -84,10 +93,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       twiml += `<Redirect>${voiceUrl}</Redirect>`;
     } else {
       // Direct or Whisper mode: Forward the call
-      // Build base URL for webhooks
-      const baseUrl = process.env.VERCEL_URL 
-        ? `https://${process.env.VERCEL_URL}`
-        : process.env.NEXT_PUBLIC_APP_URL || '';
+      // Build base URL for webhooks - prefer production URL
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL 
+        || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '');
       const callStatusUrl = baseUrl 
         ? `${baseUrl}/api/webhooks/twilio/call-status`
         : `/api/webhooks/twilio/call-status`;
@@ -98,12 +106,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           ? `${baseUrl}/api/webhooks/twilio/whisper?siteId=${site.id}&message=${encodeURIComponent(site.whisperMessage)}`
           : `/api/webhooks/twilio/whisper?siteId=${site.id}&message=${encodeURIComponent(site.whisperMessage)}`;
         twiml += `<Dial action="${callStatusUrl}" method="POST">`;
-        twiml += `<Number url="${whisperUrl}">${site.forwardToNumber}</Number>`;
+        twiml += `<Number url="${whisperUrl}">${escapeXml(site.forwardToNumber)}</Number>`;
         twiml += `</Dial>`;
       } else {
         // Direct mode: Simple forward
         twiml += `<Dial action="${callStatusUrl}" method="POST">`;
-        twiml += `<Number>${site.forwardToNumber}</Number>`;
+        twiml += `<Number>${escapeXml(site.forwardToNumber)}</Number>`;
         twiml += `</Dial>`;
       }
     }

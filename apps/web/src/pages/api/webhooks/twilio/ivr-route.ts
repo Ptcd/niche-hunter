@@ -31,9 +31,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (!digits) {
       // No digits pressed, redirect back to main voice handler
-      const baseUrl = process.env.VERCEL_URL 
-        ? `https://${process.env.VERCEL_URL}`
-        : process.env.NEXT_PUBLIC_APP_URL || '';
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL 
+        || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '');
       const voiceUrl = baseUrl 
         ? `${baseUrl}/api/webhooks/twilio/voice`
         : `/api/webhooks/twilio/voice`;
@@ -61,9 +60,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (!selectedOption || !selectedOption.forwardTo) {
       // Invalid selection, play error and redirect
-      const baseUrl = process.env.VERCEL_URL 
-        ? `https://${process.env.VERCEL_URL}`
-        : process.env.NEXT_PUBLIC_APP_URL || '';
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL 
+        || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '');
       const voiceUrl = baseUrl 
         ? `${baseUrl}/api/webhooks/twilio/voice`
         : `/api/webhooks/twilio/voice`;
@@ -78,10 +76,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Route to the selected number
     let twiml = '<?xml version="1.0" encoding="UTF-8"?><Response>';
 
-    // Build base URL for webhooks
-    const baseUrl = process.env.VERCEL_URL 
-      ? `https://${process.env.VERCEL_URL}`
-      : process.env.NEXT_PUBLIC_APP_URL || '';
+    // Build base URL for webhooks - prefer production URL
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL 
+      || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '');
     const callStatusUrl = baseUrl 
       ? `${baseUrl}/api/webhooks/twilio/call-status`
       : `/api/webhooks/twilio/call-status`;

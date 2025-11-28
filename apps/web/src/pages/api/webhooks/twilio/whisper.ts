@@ -7,13 +7,24 @@
 
 import type { NextApiRequest, NextApiResponse } from "next";
 
+// Escape XML special characters for TwiML
+function escapeXml(unsafe: string): string {
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "GET" && req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
-    const message = req.query.message as string || req.body.message as string || "New lead calling";
+    const rawMessage = req.query.message as string || req.body.message as string || "New lead calling";
+    const message = escapeXml(rawMessage);
 
     // Return TwiML that plays the whisper message
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
