@@ -85,9 +85,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Check if whisper is enabled
     if (site.whisperEnabled && site.whisperMessage) {
-      const whisperUrl = baseUrl 
+      // Build URL and escape & for XML attribute
+      const whisperUrlRaw = baseUrl 
         ? `${baseUrl}/api/webhooks/twilio/whisper?siteId=${site.id}&message=${encodeURIComponent(site.whisperMessage)}`
         : `/api/webhooks/twilio/whisper?siteId=${site.id}&message=${encodeURIComponent(site.whisperMessage)}`;
+      // Escape & to &amp; for XML attributes
+      const whisperUrl = whisperUrlRaw.replace(/&/g, '&amp;');
       twiml += `<Dial action="${callStatusUrl}" method="POST">`;
       twiml += `<Number url="${whisperUrl}">${selectedOption.forwardTo}</Number>`;
       twiml += `</Dial>`;
