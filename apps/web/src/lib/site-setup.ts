@@ -349,7 +349,7 @@ export async function buildSkeletonsForPage(pageId: string): Promise<void> {
 
   for (let i = 0; i < keywordsForClassification.length; i += batchSize) {
     const batch = keywordsForClassification.slice(i, i + batchSize);
-    const classified = await classifyKeywords(batch, site.niche.name, siteData.city, siteData.state);
+    const classified = await classifyKeywords(batch, site.niche.name, site.city, site.state);
     
     for (const result of classified) {
       classifiedKeywords[result.id] = result.role;
