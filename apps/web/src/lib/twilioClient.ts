@@ -49,6 +49,60 @@ export async function searchPhoneNumbers(areaCode: string): Promise<PhoneNumber[
 }
 
 /**
+ * Search available phone numbers by multiple area codes
+ * Returns numbers prioritized by the order of area codes provided
+ */
+export async function searchPhoneNumbersByAreaCodes(
+  areaCodes: string[],
+  limit: number = 10
+): Promise<PhoneNumber[]> {
+  if (!client) {
+    throw new Error("Twilio client not configured");
+  }
+
+  if (!areaCodes || areaCodes.length === 0) {
+    return [];
+  }
+
+  const allNumbers: PhoneNumber[] = [];
+  const numbersPerAreaCode = Math.ceil(limit / areaCodes.length);
+
+  try {
+    // Search each area code and combine results
+    for (const areaCode of areaCodes) {
+      if (allNumbers.length >= limit) {
+        break;
+      }
+
+      try {
+        const availableNumbers = await client.availablePhoneNumbers(TWILIO_DEFAULT_COUNTRY)
+          .local.list({
+            areaCode: parseInt(areaCode, 10),
+            limit: numbersPerAreaCode,
+          });
+
+        if (availableNumbers && availableNumbers.length > 0) {
+          const mapped = availableNumbers.map((number: any) => ({
+            phoneNumber: number.phoneNumber || "",
+            friendlyName: number.friendlyName || number.phoneNumber || "",
+          }));
+          allNumbers.push(...mapped);
+        }
+      } catch (err: any) {
+        // Log but continue with other area codes
+        console.warn(`[twilioClient] Area code ${areaCode} search failed:`, err.message);
+      }
+    }
+
+    // Return up to the requested limit, maintaining priority order
+    return allNumbers.slice(0, limit);
+  } catch (err: any) {
+    console.error("[twilioClient] Area code search failed:", err);
+    return [];
+  }
+}
+
+/**
  * Search available phone numbers by city and state (location-based)
  * Falls back to area code search if location search returns no results
  */

@@ -7,7 +7,8 @@
 
 import type { NextApiRequest, NextApiResponse } from "next";
 import { prisma } from "@niche-hunter/db";
-import { searchPhoneNumbersByLocation } from "../../../lib/twilioClient";
+import { searchPhoneNumbersByAreaCodes, searchPhoneNumbersByLocation } from "../../../lib/twilioClient";
+import { getAreaCodesForZip } from "../../../lib/zipToAreaCode";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
@@ -23,12 +24,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: "Missing siteId" });
     }
 
-    // Look up site to get city and state
+    // Look up site to get city, state, and batchId
     const site = await prisma.site.findUnique({
       where: { id: siteId },
       select: {
         city: true,
         state: true,
+        batchId: true,
       },
     });
 
@@ -42,17 +44,56 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
 
-    // Search for numbers matching the location
-    const numbers = await searchPhoneNumbersByLocation(
-      site.city,
-      site.state,
-      10 // Request 10 numbers
-    );
+    let numbers: any[] = [];
+    let zip: string | null = null;
+    let areaCodes: string[] = [];
+
+    // Try to get ZIP from batch scans
+    if (site.batchId) {
+      try {
+        // Get a scan from the batch to extract ZIP
+        const scan = await prisma.scan.findFirst({
+          where: {
+            batchId: site.batchId,
+            city: site.city,
+            state: site.state,
+            zip: { not: null },
+          },
+          select: {
+            zip: true,
+          },
+        });
+
+        if (scan?.zip) {
+          zip = scan.zip;
+          // Look up area codes for this ZIP
+          areaCodes = await getAreaCodesForZip(scan.zip);
+          
+          if (areaCodes.length > 0) {
+            // Search by area codes (prioritized local numbers)
+            numbers = await searchPhoneNumbersByAreaCodes(areaCodes, 10);
+          }
+        }
+      } catch (err: any) {
+        console.warn("[phone-smart-search] Failed to get ZIP from batch:", err.message);
+      }
+    }
+
+    // Fallback to location-based search if no area codes found
+    if (numbers.length === 0) {
+      numbers = await searchPhoneNumbersByLocation(
+        site.city,
+        site.state,
+        10 // Request 10 numbers
+      );
+    }
 
     return res.status(200).json({
       status: "ok",
       city: site.city,
       state: site.state,
+      zip: zip || undefined,
+      areaCodes: areaCodes.length > 0 ? areaCodes : undefined,
       numbers,
     });
   } catch (err: any) {
