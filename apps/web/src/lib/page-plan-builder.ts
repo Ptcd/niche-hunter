@@ -202,22 +202,29 @@ function clusterByServiceRoot(keywords: KeywordRow[]): Map<string, KeywordRow[]>
 // Build core pages (Home, About, Contact, FAQ)
 function buildCorePages(
   nicheName: string,
-  topMoneyKeywords: KeywordRow[],
+  homepageKeywords: KeywordRow[], // Local keywords for focus city (highest volume)
+  allMoneyKeywords: KeywordRow[], // All money keywords for supporting keywords
   cities: Array<{ city: string; state: string }>
 ): PagePlanRow[] {
   const pages: PagePlanRow[] = [];
   const existingSlugs = new Set<string>();
   
-  // Home page
+  // Home page - use highest volume LOCAL keyword for focus city
   const homeSlug = assignUniqueSlug('home', existingSlugs);
-  const top3Money = topMoneyKeywords.slice(0, 3);
+  const focusKeyword = homepageKeywords[0]?.keyword || nicheName.toLowerCase();
+  // Get top 3-5 supporting keywords from all money keywords (can include national)
+  const supportingKeywords = allMoneyKeywords
+    .filter(kw => kw.keyword !== focusKeyword) // Don't duplicate focus keyword
+    .slice(0, 5)
+    .map(k => k.keyword);
+  
   pages.push({
     pageType: 'Home',
     pageTitle: `${titleCase(nicheName)} Services ${cities.length > 0 ? `in ${cities[0].city}, ${cities[0].state}` : ''} | Expert ${titleCase(nicheName)}`,
     h1: `Professional ${titleCase(nicheName)} Services ${cities.length > 0 ? `in ${cities[0].city}, ${cities[0].state}` : ''}`,
     urlSlug: homeSlug,
-    focusKeyword: top3Money[0]?.keyword || nicheName.toLowerCase(),
-    supportingKeywords: top3Money.slice(1).map(k => k.keyword).join(', '),
+    focusKeyword: focusKeyword,
+    supportingKeywords: supportingKeywords.join(', '),
     searchIntent: 'Commercial',
     contentLength: '1500-2000 words',
     schemaType: 'LocalBusiness',
@@ -552,13 +559,29 @@ export async function buildPagePlan(
     .filter(kw => kw.type === 'money' && kw.volume > 0)
     .sort((a, b) => b.volume - a.volume);
   
-  // Get all money keywords for homepage
+  // For homepage: use ONLY local keywords for the focus city (highest volume)
+  // This ensures homepage targets the best local keyword, not a national one
+  const focusCity = cities.length > 0 ? cities[0] : null;
+  const homepageKeywords = focusCity
+    ? localKeywords
+        .filter(kw => 
+          kw.type === 'money' && 
+          kw.volume > 0 &&
+          kw.city === focusCity.city &&
+          kw.state === focusCity.state
+        )
+        .sort((a, b) => b.volume - a.volume)
+    : localKeywords
+        .filter(kw => kw.type === 'money' && kw.volume > 0)
+        .sort((a, b) => b.volume - a.volume);
+  
+  // Get all money keywords for supporting keywords (can include national)
   const allMoneyKeywords = [...localKeywords, ...nationalKeywords]
     .filter(kw => kw.type === 'money')
     .sort((a, b) => b.volume - a.volume);
   
-  // Build core pages
-  pages.push(...buildCorePages(batch.niche.name, allMoneyKeywords, cities));
+  // Build core pages - pass homepage-specific keywords separately
+  pages.push(...buildCorePages(batch.niche.name, homepageKeywords, allMoneyKeywords, cities));
   
   // Build service pages (from national keywords)
   pages.push(...buildServicePages(nationalKeywords, batch.niche.name, existingSlugs));

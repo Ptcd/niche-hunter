@@ -17,8 +17,9 @@ export interface PageSpec {
 
 /**
  * Get top keywords for a site from KeywordV5000
+ * Returns keywords sorted by volume DESC (not opportunity score)
  */
-async function getTopKeywordsForSite(siteId: string, limit: number = 10): Promise<string[]> {
+async function getTopKeywordsForSite(siteId: string, limit: number = 10): Promise<Array<{ keyword: string; volume: number; isLocal: boolean }>> {
   const site = await prisma.site.findUnique({
     where: { id: siteId },
     include: {
@@ -31,12 +32,8 @@ async function getTopKeywordsForSite(siteId: string, limit: number = 10): Promis
             include: {
               difficultyScore: true,
               metrics: true,
+              city: true,
             },
-            orderBy: [
-              { difficultyScore: { opportunity: 'desc' } },
-              { metrics: { searchVolume: 'desc' } },
-            ],
-            take: limit,
           },
         },
       },
@@ -60,16 +57,28 @@ async function getTopKeywordsForSite(siteId: string, limit: number = 10): Promis
     });
     
     if (niche?.keywords) {
-      return niche.keywords.map((kw) => kw.keyword).filter((q): q is string => !!q);
+      return niche.keywords.map((kw) => ({
+        keyword: kw.keyword,
+        volume: kw.nationalVolume || 0,
+        isLocal: false,
+      }));
     }
     
     return [];
   }
 
-  // Extract keywords, prioritizing by opportunity and volume
-  return site.batch.keywords
-    .map((kw) => kw.localizedQuery)
-    .filter((q): q is string => !!q);
+  // Extract keywords with volume, sort by volume DESC (prioritize volume over opportunity)
+  const keywordsWithVolume = site.batch.keywords
+    .map((kw) => ({
+      keyword: kw.localizedQuery || '',
+      volume: kw.metrics?.searchVolume || 0,
+      isLocal: kw.city?.city === site.city && kw.city?.state === site.state,
+    }))
+    .filter((kw) => kw.keyword && kw.volume > 0) // Only keywords with volume
+    .sort((a, b) => b.volume - a.volume) // Sort by volume DESC
+    .slice(0, limit);
+
+  return keywordsWithVolume;
 }
 
 /**
@@ -78,29 +87,40 @@ async function getTopKeywordsForSite(siteId: string, limit: number = 10): Promis
  * Returns array of page specs with type, keywords, and skeleton mapping.
  */
 export async function generatePageStrategy(siteId: string): Promise<PageSpec[]> {
-  const keywords = await getTopKeywordsForSite(siteId, 15);
+  const keywordsWithData = await getTopKeywordsForSite(siteId, 20);
+  
+  // For homepage: prioritize LOCAL keywords (highest volume local keyword)
+  const localKeywords = keywordsWithData.filter(kw => kw.isLocal);
+  const homepageKeywords = localKeywords.length > 0 
+    ? localKeywords.slice(0, 3).map(kw => kw.keyword)
+    : keywordsWithData.slice(0, 3).map(kw => kw.keyword); // Fallback to all if no local
+  
+  // For service pages: use all keywords sorted by volume (cluster by service type)
+  const serviceKeywords = keywordsWithData
+    .filter(kw => !homepageKeywords.includes(kw.keyword)) // Exclude homepage keywords
+    .slice(0, 6);
 
   const pageSpecs: PageSpec[] = [
-    // Home page - top 3 money keywords
+    // Home page - top 3 LOCAL keywords by volume (or top 3 overall if no local)
     {
       type: PageType.HOME,
-      keywords: keywords.slice(0, 3),
+      keywords: homepageKeywords,
       skeletonName: 'home-v1',
       priority: 1,
     },
-    // Core service pages - next 3-6 keywords
-    ...keywords.slice(3, 6).map((keyword, idx) => ({
+    // Core service pages - next 3-6 keywords by volume
+    ...serviceKeywords.slice(0, 3).map((kwData, idx) => ({
       type: PageType.CORE_SERVICE,
-      keywords: [keyword],
+      keywords: [kwData.keyword],
       skeletonName: 'service-v1',
       priority: 2 + idx,
     })),
-    // Support/FAQ pages - next 4 keywords
-    ...keywords.slice(6, 10).map((keyword, idx) => ({
+    // Support/FAQ pages - next 3 keywords
+    ...serviceKeywords.slice(3, 6).map((kwData, idx) => ({
       type: PageType.SUPPORT,
-      keywords: [keyword],
+      keywords: [kwData.keyword],
       skeletonName: 'faq-v1',
-      priority: 6 + idx,
+      priority: 5 + idx,
     })),
     // Standard pages
     {

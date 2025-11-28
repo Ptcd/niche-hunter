@@ -9,7 +9,10 @@ import OpenAI from 'openai';
 import { prisma } from '@niche-hunter/db';
 import { PageType, PageStatus } from '@prisma/client';
 import { buildBrandSpec } from '../../lib/brandBuilder';
-import { buildPageHtml, Section } from './htmlTemplates';
+import { buildPageHtml, Section, BrandInfo } from '../../lib/semanticHtmlBuilder';
+import { injectInternalLinks, addRelatedServicesSection, PageLink } from '../../lib/linkInjector';
+import { getExternalLinksForPrompt } from '../../lib/externalResources';
+import { generateSchemaMarkup, extractFAQFromContent, SchemaOptions } from '../../lib/schemaGenerator';
 import { generatePageStrategy, PageSpec } from './pageStrategy';
 
 const openai = new OpenAI({
@@ -110,13 +113,41 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
       : undefined,
   };
 
+  // Get all pages for internal linking
+  const allPages = await prisma.sitePage.findMany({
+    where: { siteId: site.id },
+    select: {
+      slug: true,
+      titleTag: true,
+      focusKeyword: true,
+      supportingKeywords: true,
+    },
+  });
+
+  const pageLinks: PageLink[] = allPages.map(p => ({
+    slug: p.slug || 'home',
+    title: p.titleTag || p.focusKeyword,
+    focusKeyword: p.focusKeyword,
+    supportingKeywords: p.supportingKeywords || [],
+  }));
+
+  // Get external resources for this page
+  const pageKeywords = [page.focusKeyword, ...(page.supportingKeywords || [])];
+  const externalResources = getExternalLinksForPrompt(context.niche, pageKeywords, 2);
+
   // Generate sections based on ContentSkeleton
   const sections: Section[] = [];
   
   if (page.skeletons.length > 0) {
     // Use existing skeletons
     for (const skeleton of page.skeletons) {
-      const sectionContent = await generateSectionContent(skeleton, context, page, model);
+      const sectionContent = await generateSectionContent(
+        skeleton, 
+        context, 
+        page, 
+        model,
+        externalResources
+      );
       sections.push({
         id: skeleton.sectionId,
         type: mapSectionType(skeleton.sectionId),
@@ -124,21 +155,68 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
         content: sectionContent,
         metadata: {
           targetWordCount: skeleton.targetWordCount,
-          styleVariant: skeleton.styleVariant,
+          styleVariant: skeleton.styleVariant || undefined,
         },
       });
     }
   } else {
     // Fallback: generate default sections based on page type
-    sections.push(...await generateDefaultSections(page.pageType, context, page, model));
+    sections.push(...await generateDefaultSections(page.pageType, context, page, model, externalResources));
   }
 
-  // Build HTML
+  // Inject internal links into each section's content
+  for (const section of sections) {
+    if (section.content && section.type !== 'hero' && section.type !== 'cta-block') {
+      section.content = injectInternalLinks(
+        section.content,
+        pageLinks,
+        page.slug || undefined,
+        3 // Max 3 links per section
+      );
+    }
+  }
+
+  // Add "Related Services" section if applicable
+  if (page.pageType === PageType.CORE_SERVICE) {
+    const relatedServicesHtml = addRelatedServicesSection(pageLinks, page.slug || undefined, 5);
+    if (relatedServicesHtml) {
+      sections.push({
+        id: 'related_services',
+        type: 'content',
+        heading: 'Related Services',
+        content: relatedServicesHtml,
+      });
+    }
+  }
+
+  // Generate schema markup
+  const faqItems = extractFAQFromContent(sections.map(s => s.content).join(' '));
+  const schemaOptions: SchemaOptions = {
+    brand: {
+      name: brand.name,
+      phonePretty: brand.phonePretty,
+      phoneClean: brand.phoneClean,
+      email: brand.email,
+      city: brand.city,
+      state: brand.state,
+      domain: site.domain || undefined,
+    },
+    pageType: page.pageType,
+    focusKeyword: page.focusKeyword,
+    faqItems: faqItems.length > 0 ? faqItems : undefined,
+    serviceName: page.pageType === PageType.CORE_SERVICE
+      ? page.focusKeyword 
+      : undefined,
+  };
+  const schemaMarkup = generateSchemaMarkup(schemaOptions);
+
+  // Build HTML using semantic builder
   const html = buildPageHtml(
     sections,
     brand,
     page.titleTag || page.h1,
-    page.seoDescription || undefined
+    page.seoDescription || undefined,
+    schemaMarkup
   );
 
   // Calculate word count
@@ -167,13 +245,15 @@ async function generateSectionContent(
     localHints: string[];
   },
   context: PageContext,
-  page: { focusKeyword: string; pageType: PageType },
-  model: string = 'gpt-4o'
+  page: { focusKeyword: string; pageType: PageType; supportingKeywords?: string[] },
+  model: string = 'gpt-4o',
+  externalResources: string = ''
 ): Promise<string> {
   const systemPrompt = context.promptProfile?.systemPrompt || `
 You are an expert local SEO copywriter for home-service businesses.
 Write engaging, conversion-focused content that builds trust and drives action.
 Always write in clear, friendly, professional US English.
+Output clean HTML content (paragraphs, lists, headings) - no markdown, no code blocks.
 `;
 
   const styleGuidelines = context.promptProfile?.styleGuidelines || `
@@ -183,7 +263,17 @@ Always write in clear, friendly, professional US English.
 - Mention licensing & insurance when appropriate
 - Use the business name naturally throughout
 - Include local references (city, state, neighborhoods)
+- Use semantic HTML: <p>, <ul>, <li>, <h2>, <h3> tags
+- No inline styles, no Tailwind classes, no frameworks
 `;
+
+  const supportingKeywordsText = page.supportingKeywords && page.supportingKeywords.length > 0
+    ? `\n- Supporting Keywords: ${page.supportingKeywords.slice(0, 5).join(', ')}`
+    : '';
+
+  const externalResourcesText = externalResources
+    ? `\n\nExternal Resources (cite 1-2 naturally in your content):\n${externalResources}\n\nWhen referencing these resources, use natural language like "According to [Resource Name]" or "As noted by [Resource Name]".`
+    : '';
 
   const userPrompt = `
 Write content for a ${page.pageType} page section.
@@ -191,7 +281,7 @@ Write content for a ${page.pageType} page section.
 Section Details:
 - Heading: ${skeleton.heading}
 - Purpose: ${skeleton.purpose}
-- Target word count: ${skeleton.targetWordCount} words
+- Target word count: ${skeleton.targetWordCount} words (minimum ${Math.floor(skeleton.targetWordCount * 0.9)}, maximum ${Math.ceil(skeleton.targetWordCount * 1.1)})
 ${skeleton.styleVariant ? `- Style variant: ${skeleton.styleVariant}` : ''}
 
 Business Context:
@@ -199,21 +289,24 @@ Business Context:
 - Location: ${context.city}, ${context.state}
 - Phone: ${context.brand.phonePretty}
 - Email: ${context.brand.email}
-- Primary Keyword: ${page.focusKeyword}
+- Primary Keyword: ${page.focusKeyword}${supportingKeywordsText}
 
 ${skeleton.localHints.length > 0 ? `Local Hints:\n${skeleton.localHints.map(h => `- ${h}`).join('\n')}` : ''}
 
 Style Guidelines:
 ${styleGuidelines}
+${externalResourcesText}
 
 Requirements:
 - Use the primary keyword "${page.focusKeyword}" naturally 2-3 times
 - Include local references to ${context.city}, ${context.state}
-- Write exactly ${skeleton.targetWordCount} words (within 10% tolerance)
+- Write ${skeleton.targetWordCount} words (strictly within 10% tolerance - this is critical)
 - Make it engaging and conversion-focused
-- Use proper HTML formatting (paragraphs, lists, headings)
+- Use proper semantic HTML: <p> for paragraphs, <ul><li> for lists, <h2>/<h3> for subheadings
+- Include 1-2 external resource citations if provided (use <a> tags with rel="nofollow noopener noreferrer")
+- No markdown, no code blocks, just clean HTML content
 
-Output ONLY the content text (no markdown, no code blocks, just the content).
+Output ONLY the HTML content text (no markdown, no code blocks, no backticks).
 `;
 
   try {
@@ -246,7 +339,8 @@ async function generateDefaultSections(
   pageType: PageType,
   context: PageContext,
   page: { focusKeyword: string; pageType: PageType },
-  model: string = 'gpt-4o'
+  model: string = 'gpt-4o',
+  externalResources: string = ''
 ): Promise<Section[]> {
   const sections: Section[] = [];
 
@@ -261,18 +355,18 @@ async function generateDefaultSections(
         },
         {
           id: 'services',
-          type: 'services',
+          type: 'services-grid',
           heading: 'Our Services',
           content: `Expert ${context.niche} services\nProfessional installation\nEmergency repairs\nMaintenance plans\nQuality guarantees`,
         },
         {
           id: 'trust',
-          type: 'trust',
+          type: 'why-choose-us',
           content: '',
         },
         {
           id: 'faq',
-          type: 'faq',
+          type: 'faq-accordion',
           heading: 'Frequently Asked Questions',
           content: `Q: What areas do you serve?\nA: We proudly serve ${context.city}, ${context.state} and surrounding areas.\n\nQ: Are you licensed and insured?\nA: Yes, we are fully licensed and insured for your protection.\n\nQ: Do you offer emergency services?\nA: Yes, we provide 24/7 emergency ${context.niche} services.`,
         }
@@ -295,7 +389,7 @@ async function generateDefaultSections(
         },
         {
           id: 'trust',
-          type: 'trust',
+          type: 'why-choose-us',
           content: '',
         }
       );
@@ -316,7 +410,7 @@ async function generateDefaultSections(
       sections.push(
         {
           id: 'contact',
-          type: 'contact',
+          type: 'cta-block',
           content: '',
         }
       );
@@ -333,7 +427,7 @@ async function generateDefaultSections(
 
   // Generate content for each section
   for (const section of sections) {
-    if (section.type !== 'trust' && section.type !== 'contact' && section.type !== 'footer') {
+    if (section.type !== 'why-choose-us' && section.type !== 'cta-block') {
       try {
         const pageSpec: { focusKeyword: string; pageType: PageType } = {
           focusKeyword: page.focusKeyword,
@@ -351,7 +445,8 @@ async function generateDefaultSections(
           },
           context,
           pageSpec,
-          model
+          model,
+          externalResources
         );
       } catch (error) {
         console.error(`Failed to generate content for section ${section.id}:`, error);
@@ -364,15 +459,21 @@ async function generateDefaultSections(
 }
 
 /**
- * Map section ID to section type
+ * Map section ID to section type for semantic HTML builder
  */
 function mapSectionType(sectionId: string): Section['type'] {
   if (sectionId.includes('hero')) return 'hero';
-  if (sectionId.includes('service')) return 'services';
-  if (sectionId.includes('faq') || sectionId.includes('question')) return 'faq';
-  if (sectionId.includes('trust') || sectionId.includes('badge')) return 'trust';
-  if (sectionId.includes('contact')) return 'contact';
-  if (sectionId.includes('footer')) return 'footer';
+  if (sectionId.includes('service') && sectionId.includes('grid')) return 'services-grid';
+  if (sectionId.includes('service')) return 'services-grid';
+  if (sectionId.includes('faq') || sectionId.includes('question')) return 'faq-accordion';
+  if (sectionId.includes('why_choose') || sectionId.includes('benefits')) return 'why-choose-us';
+  if (sectionId.includes('process') || sectionId.includes('how_it_works') || sectionId.includes('how_we')) return 'process-steps';
+  if (sectionId.includes('cta') || sectionId.includes('call_to_action')) return 'cta-block';
+  if (sectionId.includes('local') || sectionId.includes('city') || sectionId.includes('neighborhood')) return 'local-content';
+  if (sectionId.includes('testimonial') || sectionId.includes('review') || sectionId.includes('proof')) return 'testimonials';
+  if (sectionId.includes('problem')) return 'common-problems';
+  if (sectionId.includes('neighborhood') || sectionId.includes('area')) return 'neighborhoods';
+  if (sectionId.includes('contact')) return 'cta-block';
   return 'content';
 }
 

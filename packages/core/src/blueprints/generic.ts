@@ -1,8 +1,8 @@
 /**
- * HVAC Niche Blueprints
+ * Generic Blueprints
  * 
- * Complete blueprint definitions for HVAC service websites.
- * Based on the comprehensive blueprint specification.
+ * Universal page blueprints that work for any service niche.
+ * Uses {{SERVICE_NAME}} tokens instead of hardcoded niche terms.
  */
 
 import { PageBlueprint, SectionBlueprint, KeywordRole } from './types';
@@ -20,7 +20,7 @@ const lightRules = {
   optionalMaxEach: 2,
 };
 
-// HOME PAGE SECTIONS
+// HOME PAGE SECTIONS (Generic)
 const homeSections: SectionBlueprint[] = [
   {
     id: 'hero_intro',
@@ -152,7 +152,7 @@ const homeSections: SectionBlueprint[] = [
   },
 ];
 
-// PRIMARY SERVICE PAGE SECTIONS
+// PRIMARY SERVICE PAGE SECTIONS (Generic)
 const primaryServiceSections: SectionBlueprint[] = [
   {
     id: 'hero_service',
@@ -302,7 +302,7 @@ const primaryServiceSections: SectionBlueprint[] = [
   },
 ];
 
-// CITY PAGE SECTIONS
+// CITY PAGE SECTIONS (Generic)
 const cityPageSections: SectionBlueprint[] = [
   {
     id: 'hero_city',
@@ -414,7 +414,7 @@ const cityPageSections: SectionBlueprint[] = [
   },
 ];
 
-// HOME PAGE BLUEPRINT
+// HOME PAGE BLUEPRINT (Generic)
 const homeBlueprint: PageBlueprint = {
   pageType: 'home',
   variants: [
@@ -485,7 +485,7 @@ const homeBlueprint: PageBlueprint = {
   sections: homeSections,
 };
 
-// PRIMARY SERVICE PAGE BLUEPRINT
+// PRIMARY SERVICE PAGE BLUEPRINT (Generic)
 const primaryServiceBlueprint: PageBlueprint = {
   pageType: 'primary_service',
   variants: [
@@ -559,7 +559,7 @@ const primaryServiceBlueprint: PageBlueprint = {
   sections: primaryServiceSections,
 };
 
-// CITY PAGE BLUEPRINT
+// CITY PAGE BLUEPRINT (Generic)
 const cityPageBlueprint: PageBlueprint = {
   pageType: 'city_page',
   variants: [
@@ -624,11 +624,10 @@ const cityPageBlueprint: PageBlueprint = {
   sections: cityPageSections,
 };
 
-// Export HVAC blueprints
-export const hvacBlueprints: { [pageType: string]: PageBlueprint } = {
+// Export generic blueprints
+export const genericBlueprints: { [pageType: string]: PageBlueprint } = {
   home: homeBlueprint,
   primary_service: primaryServiceBlueprint,
   city_page: cityPageBlueprint,
-  // TODO: Add other page types (service_hub, secondary_service, emergency_service, etc.)
 };
 

@@ -10,7 +10,7 @@
  * 2. Whitelist your Cloudways server IP in Namecheap API settings
  * 3. Set environment variables in Vercel:
  *    - NAMECHEAP_PROXY_URL = https://your-cloudways-site.com/namecheap-proxy.php
- *    - NAMECHEAP_PROXY_SECRET = (generate a random string)
+ *    - NAMECHEAP_PROXY_SECRET = o0fw8j_NicheHunter_2025
  *    - NAMECHEAP_API_USER = your Namecheap username
  *    - NAMECHEAP_API_KEY = your Namecheap API key
  *    - NAMECHEAP_CLIENT_IP = your Cloudways server IP
@@ -23,7 +23,7 @@
 // ============================================
 // CONFIGURATION - Change this secret!
 // ============================================
-$PROXY_SECRET = 'CHANGE_THIS_TO_A_RANDOM_STRING_123';
+$PROXY_SECRET = 'o0fw8j_NicheHunter_2025';
 
 // ============================================
 // CORS Headers (allow requests from your Vercel app)
