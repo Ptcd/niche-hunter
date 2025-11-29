@@ -370,6 +370,7 @@ model Site {
   ivrOptions        Json?    // Array of IVR menu options: [{digit: "1", label: "Sales", forwardTo: "+1234567890"}]
   registrar         String?  // "namecheap" | null
   logoUrl           String?  // URL to logo image
+  logoPromptHint    String?  // Optional user hint for logo style
   promptProfileId   String?  // Link to PromptProfile
   promptProfile     PromptProfile? @relation(fields: [promptProfileId], references: [id])
   // Phone number options
@@ -454,6 +455,8 @@ model SitePage {
   wpPermalink        String?  // Full WordPress URL after publish
   wpEditUrl          String?  // convenience
   aiDraftJson        Json?    // structured sections
+  heroImageUrl       String?  // URL to hero/featured image
+  heroImageAlt       String?  // SEO alt text for hero image
   latestGenerationAt DateTime?
   latestPublishedAt   DateTime?
   createdAt          DateTime @default(now())

@@ -7,6 +7,10 @@
 import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
 import CitationsPanel from '@/components/SiteFactory/CitationsPanel';
+import PageSidebar from '@/components/SiteBuilder/PageSidebar';
+import PageEditor from '@/components/SiteBuilder/PageEditor';
+import AddPageModal from '@/components/SiteBuilder/AddPageModal';
+import LogoPanel from '@/components/SiteBuilder/LogoPanel';
 
 // Leads Panel Component
 function LeadsPanel({ siteId }: { siteId: string }) {
@@ -1460,6 +1464,8 @@ interface SitePage {
   wpPermalink: string | null;
   wpEditUrl: string | null;
   latestPublishedAt: string | null;
+  heroImageUrl: string | null;
+  heroImageAlt: string | null;
 }
 
 interface Site {
@@ -1474,6 +1480,7 @@ interface Site {
   twilioNumber: string | null;
   forwardToNumber: string | null;
   status: string;
+  logoUrl: string | null;
   pages: SitePage[];
   promptProfile: { id: string; name: string } | null;
   keywords: string[];
@@ -1495,6 +1502,8 @@ export default function SiteFactoryDetailPage() {
   const [showTwilioModal, setShowTwilioModal] = useState(false);
   const [showRingbaModal, setShowRingbaModal] = useState(false);
   const [showVoipmsModal, setShowVoipmsModal] = useState(false);
+  const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
+  const [showAddPageModal, setShowAddPageModal] = useState(false);
 
   useEffect(() => {
     if (siteId && typeof siteId === 'string') {
@@ -1728,6 +1737,14 @@ export default function SiteFactoryDetailPage() {
         </div>
       </div>
 
+      {/* Logo Panel */}
+      <LogoPanel
+        siteId={siteId as string}
+        logoUrl={site.logoUrl || null}
+        brandName={site.siteName || `${site.city} ${site.niche.name}`}
+        onLogoUpdate={fetchSite}
+      />
+
       {/* Keywords Panel */}
       <KeywordsPanel 
         keywordsWithVolume={site.keywordsWithVolume}
@@ -1742,119 +1759,37 @@ export default function SiteFactoryDetailPage() {
       {/* Citations Panel */}
       <CitationsPanel siteId={siteId as string} />
 
-      {/* Pages Table */}
-      <div style={{ border: '1px solid #ddd', borderRadius: '8px', padding: '1.5rem' }}>
-        <h2 style={{ marginTop: 0 }}>Pages ({site.pages.length})</h2>
-        
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ borderBottom: '2px solid #ddd' }}>
-              <th style={{ textAlign: 'left', padding: '0.75rem' }}>Type</th>
-              <th style={{ textAlign: 'left', padding: '0.75rem' }}>Slug</th>
-              <th style={{ textAlign: 'left', padding: '0.75rem' }}>Keyword</th>
-              <th style={{ textAlign: 'left', padding: '0.75rem' }}>Status</th>
-              <th style={{ textAlign: 'left', padding: '0.75rem' }}>Published</th>
-              <th style={{ textAlign: 'left', padding: '0.75rem' }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {site.pages.map((page) => (
-              <tr key={page.id} style={{ borderBottom: '1px solid #eee' }}>
-                <td style={{ padding: '0.75rem' }}>{page.pageType}</td>
-                <td style={{ padding: '0.75rem' }}>{page.slug || '(home)'}</td>
-                <td style={{ padding: '0.75rem' }}>{page.focusKeyword}</td>
-                <td style={{ padding: '0.75rem' }}>
-                  <span style={{
-                    padding: '0.25rem 0.5rem',
-                    borderRadius: '4px',
-                    backgroundColor: page.status === 'APPROVED' ? '#d4edda' : page.status === 'PUBLISHED' ? '#cce5ff' : '#fff3cd',
-                    color: page.status === 'APPROVED' ? '#155724' : page.status === 'PUBLISHED' ? '#004085' : '#856404',
-                    fontSize: '0.875rem'
-                  }}>
-                    {page.status || 'draft'}
-                  </span>
-                </td>
-                <td style={{ padding: '0.75rem', fontSize: '0.875rem' }}>
-                  {page.wpPermalink ? (
-                    <div>
-                      <div>✓ Published</div>
-                      {page.latestPublishedAt && (
-                        <div style={{ color: '#666', fontSize: '0.75rem' }}>
-                          {new Date(page.latestPublishedAt).toLocaleDateString()}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <span style={{ color: '#999' }}>Not published</span>
-                  )}
-                </td>
-                <td style={{ padding: '0.75rem' }}>
-                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        router.push(`/sites/${siteId}/pages/${page.id}`);
-                      }}
-                      style={{ padding: '0.25rem 0.75rem', cursor: 'pointer', border: '1px solid #ddd', borderRadius: '4px', backgroundColor: 'white' }}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        if (!confirm('Regenerate this page with GPT? This will replace the current draft.')) return;
-                        try {
-                          const res = await fetch(`/api/v5000/sites/${siteId}/pages/${page.id}/regenerate`, {
-                            method: 'POST',
-                          });
-                          if (res.ok) {
-                            alert('Page regenerated successfully!');
-                            fetchSite();
-                          } else {
-                            alert('Failed to regenerate page');
-                          }
-                        } catch (error) {
-                          console.error('Error regenerating:', error);
-                          alert('Failed to regenerate page');
-                        }
-                      }}
-                      style={{ padding: '0.25rem 0.75rem', cursor: 'pointer', border: '1px solid #0070f3', borderRadius: '4px', backgroundColor: '#0070f3', color: 'white' }}
-                    >
-                      Regenerate
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleApprovePage(page.id, page.status);
-                      }}
-                      style={{
-                        padding: '0.25rem 0.75rem',
-                        cursor: 'pointer',
-                        backgroundColor: page.status === 'APPROVED' ? '#dc3545' : '#28a745',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px'
-                      }}
-                    >
-                      {page.status === 'APPROVED' ? 'Unapprove' : 'Approve'}
-                    </button>
-                    {page.wpPermalink && (
-                      <a
-                        href={page.wpPermalink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        style={{ padding: '0.25rem 0.75rem', textDecoration: 'none', color: '#0070f3', border: '1px solid #0070f3', borderRadius: '4px' }}
-                      >
-                        View
-                      </a>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {/* Site Builder - Sidebar Layout */}
+      <div style={{ 
+        border: '1px solid #ddd', 
+        borderRadius: '8px', 
+        overflow: 'hidden',
+        display: 'flex',
+        height: 'calc(100vh - 600px)',
+        minHeight: '600px'
+      }}>
+        <PageSidebar
+          pages={site.pages.map(p => ({
+            id: p.id,
+            pageType: p.pageType,
+            slug: p.slug,
+            titleTag: p.titleTag,
+            focusKeyword: p.focusKeyword,
+            status: p.status,
+            wpPermalink: p.wpPermalink,
+            latestPublishedAt: p.latestPublishedAt,
+          }))}
+          selectedPageId={selectedPageId}
+          onSelectPage={setSelectedPageId}
+          onAddPage={() => setShowAddPageModal(true)}
+        />
+        <PageEditor
+          siteId={siteId as string}
+          pageId={selectedPageId}
+          city={site.city}
+          state={site.state}
+          onPageUpdate={fetchSite}
+        />
       </div>
 
       {/* Modals */}
@@ -1881,6 +1816,28 @@ export default function SiteFactoryDetailPage() {
 
       {/* VoIP.ms Phone Modal */}
       {showVoipmsModal && <VoipmsPhoneModal siteId={siteId as string} onClose={() => setShowVoipmsModal(false)} onSuccess={fetchSite} />}
+
+      {/* Add Page Modal */}
+      {showAddPageModal && (
+        <AddPageModal
+          siteId={siteId as string}
+          onClose={() => setShowAddPageModal(false)}
+          onSuccess={async () => {
+            await fetchSite();
+            // Select the newly created page after a brief delay
+            setTimeout(async () => {
+              const res = await fetch(`/api/v5000/sites/${siteId}`);
+              if (res.ok) {
+                const updatedSite = await res.json();
+                if (updatedSite.pages && updatedSite.pages.length > 0) {
+                  // Select the last page (newly created)
+                  setSelectedPageId(updatedSite.pages[updatedSite.pages.length - 1].id);
+                }
+              }
+            }, 500);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -15,6 +15,7 @@ import { getExternalLinksForPrompt } from '../../lib/externalResources';
 import { generateSchemaMarkup, extractFAQFromContent, SchemaOptions } from '../../lib/schemaGenerator';
 import { generatePageStrategy, PageSpec } from './pageStrategy';
 import { buildSkeletonsForPage } from '../../lib/site-setup';
+import { generateAltText } from '../../lib/altTextGenerator';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -421,8 +422,17 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
   const baseUrl = site.domain ? `https://${site.domain}` : `https://example.com`;
   const pageUrl = `${baseUrl}/${page.slug || ''}`;
 
+  // Get hero image if available
+  const heroImageUrl = page.heroImageUrl;
+  const heroImageAlt = page.heroImageAlt || (heroImageUrl ? generateAltText({
+    focusKeyword: page.focusKeyword,
+    city: context.city,
+    state: context.state,
+    context: 'hero image',
+  }) : undefined);
+
   // Build HTML using semantic builder
-  const html = buildPageHtml(
+  let html = buildPageHtml(
     sections,
     brand,
     seoMeta.title,
@@ -431,6 +441,36 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
     pageUrl,
     page.focusKeyword
   );
+
+  // Inject hero image into hero section if available
+  if (heroImageUrl) {
+    const heroImageHtml = `<img src="${heroImageUrl}" alt="${heroImageAlt || ''}" class="hero-image" />`;
+    // Insert hero image at the start of hero section content
+    html = html.replace(
+      /(<section class="hero-section">[\s\S]*?<div class="hero-content">)/i,
+      `$1\n    <div class="hero-image-wrapper">${heroImageHtml}</div>`
+    );
+  }
+
+  // Process all images in content to ensure they have alt text
+  html = html.replace(/<img([^>]*?)(?:\s+alt=["']([^"']*)["'])?([^>]*?)>/gi, (match, before, existingAlt, after) => {
+    // If image already has alt text, keep it
+    if (existingAlt) {
+      return match;
+    }
+    
+    // Generate alt text based on context
+    // Try to extract context from surrounding content or use default
+    const altText = generateAltText({
+      focusKeyword: page.focusKeyword,
+      city: context.city,
+      state: context.state,
+      context: 'image',
+    });
+    
+    // Insert alt attribute
+    return `<img${before} alt="${altText}"${after}>`;
+  });
 
   // Calculate word count
   const wordCount = html.split(/\s+/).length;

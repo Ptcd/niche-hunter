@@ -70,6 +70,8 @@ async function handler(req: NextApiRequest & { auth: any }, res: NextApiResponse
             wpPermalink: true,
             wpEditUrl: true,
             latestPublishedAt: true,
+            heroImageUrl: true,
+            heroImageAlt: true,
           },
         },
       },
