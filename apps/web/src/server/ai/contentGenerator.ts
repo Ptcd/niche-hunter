@@ -535,13 +535,15 @@ Content Requirements:
 - Include 1-2 external resource citations if provided (use <a> tags with rel="nofollow noopener noreferrer")
 - No markdown, no code blocks, just clean HTML content
 
-IMPORTANT - SERVICE NAME REMINDER:
+IMPORTANT - HEADING RULES:
+- NEVER use <h1> tags - the page already has an H1, do not add another one
+- For section headings, use <h2> or <h3> only
 - Service name to use: "${serviceName}"
 - NEVER use generic terms like "HVAC" or "${nicheSlug}" in headings
 - In headings, use "${serviceName}" or "${page.focusKeyword}"
 - Example heading: "${serviceName} Services in ${context.city}" or "Why Choose Us for ${serviceName}"
 
-Output ONLY the HTML content text (no markdown, no code blocks, no backticks).
+Output ONLY the HTML content text (no markdown, no code blocks, no backticks). DO NOT include any <h1> tags.
 `;
 
   try {
@@ -587,6 +589,13 @@ Output ONLY the HTML content text (no markdown, no code blocks, no backticks).
       (match, openTag, before, hvac, after) => {
         return `${openTag}${before}${serviceName}${after}`;
       }
+    );
+    
+    // CRITICAL: Strip any H1 tags - they should never be in section content
+    // Convert H1 to H2 to preserve the heading but fix the SEO issue
+    processedContent = processedContent.replace(
+      /<h1([^>]*)>([\s\S]*?)<\/h1>/gi,
+      '<h2$1>$2</h2>'
     );
 
     return processedContent;
