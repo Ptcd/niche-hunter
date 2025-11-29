@@ -65,7 +65,11 @@ export function buildHeroSection(section: Section, brand: BrandInfo, focusKeywor
 export function buildIntroSection(section: Section): string {
   const heading = section.heading ? `<h2>${escapeHtml(section.heading)}</h2>` : '';
   // CRITICAL: Strip any H1 tags from GPT-generated content to prevent duplicate H1
-  const safeContent = stripH1FromContent(section.content);
+  let safeContent = stripH1FromContent(section.content);
+  // Also strip leading H2 if we're providing our own heading
+  if (section.heading) {
+    safeContent = stripLeadingH2FromContent(safeContent);
+  }
   
   return `
 <section class="content-section">
@@ -82,7 +86,10 @@ export function buildIntroSection(section: Section): string {
  */
 export function buildServicesGridSection(section: Section): string {
   const heading = section.heading ? `<h2>${escapeHtml(section.heading)}</h2>` : '';
-  const safeContent = stripH1FromContent(section.content);
+  let safeContent = stripH1FromContent(section.content);
+  if (section.heading) {
+    safeContent = stripLeadingH2FromContent(safeContent);
+  }
   
   return `
 <section class="services-section">
@@ -99,7 +106,8 @@ export function buildServicesGridSection(section: Section): string {
  */
 export function buildWhyChooseUsSection(section: Section): string {
   const heading = section.heading || 'Why Choose Us';
-  const safeContent = stripH1FromContent(section.content);
+  let safeContent = stripH1FromContent(section.content);
+  safeContent = stripLeadingH2FromContent(safeContent);
   
   return `
 <section class="why-choose-section">
@@ -116,7 +124,8 @@ export function buildWhyChooseUsSection(section: Section): string {
  */
 export function buildProcessStepsSection(section: Section): string {
   const heading = section.heading || 'How It Works';
-  const safeContent = stripH1FromContent(section.content);
+  let safeContent = stripH1FromContent(section.content);
+  safeContent = stripLeadingH2FromContent(safeContent);
   
   return `
 <section class="process-section">
@@ -135,8 +144,9 @@ export function buildProcessStepsSection(section: Section): string {
 export function buildFAQSection(section: Section): string {
   const heading = section.heading || 'Frequently Asked Questions';
   
-  // Strip any H1 tags first
+  // Strip any H1 and leading H2 tags first
   let faqContent = stripH1FromContent(section.content);
+  faqContent = stripLeadingH2FromContent(faqContent);
   
   // If content is in Q:/A: format, convert to <details> elements
   if (faqContent.includes('Q:') && faqContent.includes('A:')) {
@@ -178,7 +188,8 @@ export function buildFAQSection(section: Section): string {
  * Build CTA block section
  */
 export function buildCTASection(section: Section, brand: BrandInfo): string {
-  const safeContent = stripH1FromContent(section.content);
+  let safeContent = stripH1FromContent(section.content);
+  safeContent = stripLeadingH2FromContent(safeContent);
   return `
 <section class="cta-section">
   <div class="cta-content">
@@ -197,7 +208,10 @@ export function buildCTASection(section: Section, brand: BrandInfo): string {
  */
 export function buildLocalContentSection(section: Section): string {
   const heading = section.heading ? `<h2>${escapeHtml(section.heading)}</h2>` : '';
-  const safeContent = stripH1FromContent(section.content);
+  let safeContent = stripH1FromContent(section.content);
+  if (section.heading) {
+    safeContent = stripLeadingH2FromContent(safeContent);
+  }
   
   return `
 <section class="local-content-section">
@@ -286,7 +300,8 @@ export function buildTestimonialsSection(section: Section, brand?: BrandInfo): s
  */
 export function buildCommonProblemsSection(section: Section): string {
   const heading = section.heading || 'Common Problems We Solve';
-  const safeContent = stripH1FromContent(section.content);
+  let safeContent = stripH1FromContent(section.content);
+  safeContent = stripLeadingH2FromContent(safeContent);
   
   return `
 <section class="problems-section">
@@ -303,7 +318,8 @@ export function buildCommonProblemsSection(section: Section): string {
  */
 export function buildNeighborhoodsSection(section: Section): string {
   const heading = section.heading || 'Areas We Serve';
-  const safeContent = stripH1FromContent(section.content);
+  let safeContent = stripH1FromContent(section.content);
+  safeContent = stripLeadingH2FromContent(safeContent);
   
   return `
 <section class="neighborhoods-section">
@@ -347,7 +363,8 @@ export function buildTrustBadgesSection(section: Section): string {
  */
 export function buildHoursSection(section: Section, brand: BrandInfo): string {
   const heading = section.heading || 'Business Hours';
-  const safeContent = stripH1FromContent(section.content);
+  let safeContent = stripH1FromContent(section.content);
+  safeContent = stripLeadingH2FromContent(safeContent);
   
   return `
 <section class="hours-section">
@@ -367,7 +384,8 @@ export function buildHoursSection(section: Section, brand: BrandInfo): string {
  */
 export function buildGuaranteesSection(section: Section): string {
   const heading = section.heading || 'Our Guarantee';
-  const safeContent = stripH1FromContent(section.content);
+  let safeContent = stripH1FromContent(section.content);
+  safeContent = stripLeadingH2FromContent(safeContent);
   
   return `
 <section class="guarantees-section">
@@ -384,7 +402,8 @@ export function buildGuaranteesSection(section: Section): string {
  */
 export function buildCaseStudySection(section: Section): string {
   const heading = section.heading || 'Recent Project';
-  const safeContent = stripH1FromContent(section.content);
+  let safeContent = stripH1FromContent(section.content);
+  safeContent = stripLeadingH2FromContent(safeContent);
   
   return `
 <section class="case-study-section">
@@ -521,6 +540,15 @@ ${schemaMarkup ? `<script type="application/ld+json">${schemaMarkup}</script>` :
 function stripH1FromContent(content: string): string {
   // Convert any H1 tags to H2 to prevent duplicate H1 issues
   return content.replace(/<h1([^>]*)>([\s\S]*?)<\/h1>/gi, '<h2$1>$2</h2>');
+}
+
+/**
+ * Strip leading H2 from content - prevents duplicate H2 when section already has heading
+ * Only removes the FIRST H2 if it appears at the start of content
+ */
+function stripLeadingH2FromContent(content: string): string {
+  // Remove leading H2 if it appears at the very beginning (with optional whitespace)
+  return content.replace(/^\s*<h2[^>]*>[\s\S]*?<\/h2>\s*/i, '');
 }
 
 /**
