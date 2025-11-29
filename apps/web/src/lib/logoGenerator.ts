@@ -56,6 +56,10 @@ export async function generateLogo(options: LogoGenerationOptions): Promise<stri
       response_format: 'url',
     });
 
+    if (!response.data || response.data.length === 0) {
+      throw new Error('No image data returned from DALL-E');
+    }
+
     const imageUrl = response.data[0]?.url;
     if (!imageUrl) {
       throw new Error('No image URL returned from DALL-E');
