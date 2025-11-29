@@ -32,14 +32,23 @@ export interface BrandInfo {
 
 /**
  * Build hero section HTML
+ * H1 must contain focus keyword + city for SEO audit
  */
-export function buildHeroSection(section: Section, brand: BrandInfo): string {
-  const heading = section.heading || `${brand.name} - ${brand.city}, ${brand.state}`;
+export function buildHeroSection(section: Section, brand: BrandInfo, focusKeyword?: string): string {
+  // Use focus keyword in H1 if provided, otherwise use section heading
+  let heading = section.heading || `${brand.name} - ${brand.city}, ${brand.state}`;
+  
+  // If focus keyword provided and heading doesn't contain it, update heading
+  if (focusKeyword && !heading.toLowerCase().includes(focusKeyword.toLowerCase().split(' ')[0])) {
+    // Extract service name from focus keyword (e.g., "ac repair" from "ac repair in Wesley Chapel")
+    const servicePart = focusKeyword.split(' in ')[0] || focusKeyword.split(' ').slice(0, -2).join(' ');
+    heading = `${servicePart} in ${brand.city}, ${brand.state}`;
+  }
   
   return `
 <section class="hero-section">
+  <h1 class="page-title">${escapeHtml(heading)}</h1>
   <div class="hero-content">
-    <h1>${escapeHtml(heading)}</h1>
     <div class="hero-text">
       ${section.content}
     </div>
@@ -121,15 +130,44 @@ export function buildProcessStepsSection(section: Section): string {
 
 /**
  * Build FAQ accordion section
+ * Converts Q:/A: format to semantic <details> elements for schema detection
  */
 export function buildFAQSection(section: Section): string {
   const heading = section.heading || 'Frequently Asked Questions';
+  
+  let faqContent = section.content;
+  
+  // If content is in Q:/A: format, convert to <details> elements
+  if (faqContent.includes('Q:') && faqContent.includes('A:')) {
+    const qaRegex = /Q:\s*(.*?)\s*A:\s*(.*?)(?=Q:|$)/gis;
+    const faqItems: string[] = [];
+    let match;
+    
+    while ((match = qaRegex.exec(faqContent)) !== null) {
+      const question = match[1].trim();
+      const answer = match[2].trim();
+      
+      if (question && answer) {
+        faqItems.push(`
+<details>
+  <summary>${escapeHtml(question)}</summary>
+  <div class="faq-answer">
+    <p>${escapeHtml(answer)}</p>
+  </div>
+</details>`);
+      }
+    }
+    
+    if (faqItems.length > 0) {
+      faqContent = faqItems.join('\n');
+    }
+  }
   
   return `
 <section class="faq-section">
   <h2>${escapeHtml(heading)}</h2>
   <div class="faq-list">
-    ${section.content}
+    ${faqContent}
   </div>
 </section>
   `.trim();
@@ -169,16 +207,40 @@ export function buildLocalContentSection(section: Section): string {
 }
 
 /**
- * Build testimonials section
+ * Build testimonials section with star ratings
  */
-export function buildTestimonialsSection(section: Section): string {
+export function buildTestimonialsSection(section: Section, brand?: BrandInfo): string {
   const heading = section.heading || 'What Our Customers Say';
+  
+  // If content contains testimonial structure, use it; otherwise format it
+  let testimonialsHtml = section.content;
+  
+  // Check if content already has HTML structure
+  if (!testimonialsHtml.includes('<div') && !testimonialsHtml.includes('<blockquote')) {
+    // Format plain text testimonials with star ratings
+    const testimonialLines = testimonialsHtml.split('\n').filter(l => l.trim());
+    const formattedTestimonials = testimonialLines.map((line, idx) => {
+      // Try to extract customer name and location from line
+      const nameMatch = line.match(/-?\s*([A-Z][a-z]+\s+[A-Z]\.?)(?:\s*,\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?))?/);
+      const customerName = nameMatch ? nameMatch[1] : `Customer ${idx + 1}`;
+      const location = nameMatch && nameMatch[2] ? nameMatch[2] : (brand?.city || '');
+      
+      return `
+<div class="testimonial">
+  <div class="rating">★★★★★ 5/5</div>
+  <blockquote>${escapeHtml(line.replace(/-?\s*[A-Z][a-z]+\s+[A-Z]\.?.*$/, '').trim())}</blockquote>
+  <cite>- ${escapeHtml(customerName)}${location ? `, ${escapeHtml(location)}` : ''}</cite>
+</div>`;
+    }).join('\n');
+    
+    testimonialsHtml = formattedTestimonials;
+  }
   
   return `
 <section class="testimonials-section">
   <h2>${escapeHtml(heading)}</h2>
   <div class="testimonials-grid">
-    ${section.content}
+    ${testimonialsHtml}
   </div>
 </section>
   `.trim();
@@ -222,11 +284,22 @@ export function buildNeighborhoodsSection(section: Section): string {
 export function buildTrustBadgesSection(section: Section): string {
   const heading = section.heading || 'Why You Can Trust Us';
   
+  // Format trust badges with icons/indicators
+  const badges = section.content.split('\n').filter(b => b.trim());
+  const formattedBadges = badges.map(badge => {
+    const badgeText = badge.trim();
+    return `
+<div class="trust-badge">
+  <span class="badge-icon">✓</span>
+  <span class="badge-text">${escapeHtml(badgeText)}</span>
+</div>`;
+  }).join('\n');
+  
   return `
 <section class="trust-badges-section">
   <h2>${escapeHtml(heading)}</h2>
   <div class="trust-badges">
-    ${section.content}
+    ${formattedBadges}
   </div>
 </section>
   `.trim();
@@ -334,12 +407,13 @@ export function buildPageHtml(
   pageTitle: string,
   metaDescription?: string,
   schemaMarkup?: string,
-  canonicalUrl?: string
+  canonicalUrl?: string,
+  focusKeyword?: string
 ): string {
   const htmlSections = sections.map((section) => {
     switch (section.type) {
       case 'hero':
-        return buildHeroSection(section, brand);
+        return buildHeroSection(section, brand, focusKeyword);
       case 'intro':
       case 'content':
         return buildIntroSection(section);
@@ -356,7 +430,7 @@ export function buildPageHtml(
       case 'local-content':
         return buildLocalContentSection(section);
       case 'testimonials':
-        return buildTestimonialsSection(section);
+        return buildTestimonialsSection(section, brand);
       case 'common-problems':
         return buildCommonProblemsSection(section);
       case 'neighborhoods':

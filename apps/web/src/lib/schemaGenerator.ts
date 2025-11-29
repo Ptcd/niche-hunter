@@ -19,7 +19,7 @@ export interface SchemaOptions {
  * Generate LocalBusiness schema (for all pages)
  */
 function generateLocalBusinessSchema(brand: BrandInfo): object {
-  return {
+  const schema: any = {
     '@context': 'https://schema.org',
     '@type': 'LocalBusiness',
     name: brand.name,
@@ -32,7 +32,31 @@ function generateLocalBusinessSchema(brand: BrandInfo): object {
       addressCountry: 'US',
     },
     url: brand.domain ? `https://${brand.domain}` : undefined,
+    // Service area for SAB businesses
+    areaServed: {
+      '@type': 'City',
+      name: brand.city,
+    },
+    // Opening hours (default business hours)
+    openingHoursSpecification: [
+      {
+        '@type': 'OpeningHoursSpecification',
+        dayOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+        opens: '08:00',
+        closes: '18:00',
+      },
+      {
+        '@type': 'OpeningHoursSpecification',
+        dayOfWeek: 'Saturday',
+        opens: '09:00',
+        closes: '16:00',
+      },
+    ],
+    // Price range (typical for service businesses)
+    priceRange: '$$',
   };
+
+  return schema;
 }
 
 /**

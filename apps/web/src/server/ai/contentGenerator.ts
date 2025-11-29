@@ -234,7 +234,23 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
   });
 
   // Generate schema markup
-  const faqItems = extractFAQFromContent(sections.map(s => s.content).join(' '));
+  // Extract FAQ items from all sections, prioritizing FAQ sections
+  const faqSection = sections.find(s => s.type === 'faq-accordion');
+  let faqItems: Array<{ question: string; answer: string }> = [];
+  
+  if (faqSection) {
+    // Extract from FAQ section first
+    faqItems = extractFAQFromContent(faqSection.content);
+    
+    // If no FAQ items found, extract from all content as fallback
+    if (faqItems.length === 0) {
+      faqItems = extractFAQFromContent(sections.map(s => s.content).join(' '));
+    }
+  } else {
+    // No FAQ section, try to extract from all content
+    faqItems = extractFAQFromContent(sections.map(s => s.content).join(' '));
+  }
+  
   const schemaOptions: SchemaOptions = {
     brand: {
       name: brand.name,
@@ -265,7 +281,8 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
     seoMeta.title,
     seoMeta.description,
     schemaMarkup,
-    pageUrl
+    pageUrl,
+    page.focusKeyword
   );
 
   // Calculate word count
@@ -447,9 +464,10 @@ Style Guidelines:
 ${styleGuidelines}
 ${externalResourcesText}
 
-SEO AUDIT REQUIREMENTS (CRITICAL):
+SEO AUDIT REQUIREMENTS (CRITICAL - MUST FOLLOW):
 - Primary keyword "${page.focusKeyword}" MUST appear in:
-  * First paragraph (if this is intro/hero section)
+  * FIRST SENTENCE of this section (if this is intro/hero section, this is MANDATORY)
+  * First paragraph (if this is intro/hero section, keyword must be in first 50 words)
   * At least one subheading (H2 or H3) if this section has subheadings
   * Naturally throughout (target 0.5-2% density - not stuffed, not too sparse)
 - Local signals REQUIRED:
@@ -458,7 +476,9 @@ SEO AUDIT REQUIREMENTS (CRITICAL):
   * Include specific neighborhood names, zip codes, or nearby areas in ${context.city}
   * Reference local landmarks, business districts, or well-known areas in ${context.city}
   * If this is a case-study section: Include a specific project location (neighborhood or street area) in ${context.city}
-- If this is the intro/hero section: First 150 words MUST mention both "${page.focusKeyword.split(' ')[0]}" and "${context.city}" together
+- If this is the intro/hero section: 
+  * FIRST SENTENCE MUST be: "${page.focusKeyword} services in ${context.city}, ${context.state}..."
+  * First 150 words MUST mention both "${page.focusKeyword.split(' ')[0]}" and "${context.city}" together
 - Include service/location variations naturally (e.g., "${context.city}", "${context.state}", city abbreviations)
 - UNIQUENESS: Make this content specific to ${context.city} - avoid generic template language. Include city-specific details that make this page unique from other location pages.
 
@@ -516,7 +536,7 @@ async function generateDefaultSections(
         {
           id: 'hero',
           type: 'hero',
-          heading: `${context.brand.name} - ${context.city}, ${context.state}`,
+          heading: `${page.focusKeyword} | ${context.brand.name}`,
           content: `Professional ${context.niche} services in ${context.city}, ${context.state}. Trusted by homeowners for quality work and exceptional service.`,
         },
         {
@@ -588,7 +608,7 @@ async function generateDefaultSections(
         {
           id: 'hero',
           type: 'hero',
-          heading: `${page.focusKeyword} in ${context.city}, ${context.state}`,
+          heading: `${page.focusKeyword} | ${context.brand.name}`,
           content: `Expert ${page.focusKeyword} services for ${context.city} homeowners. Professional, reliable, and affordable.`,
         },
         {
@@ -673,19 +693,41 @@ async function generateDefaultSections(
   }
 
   // Generate content for each section
+  // Only skip CTA blocks (they have static content), but generate content for all others
   for (const section of sections) {
-    if (section.type !== 'why-choose-us' && section.type !== 'cta-block') {
+    if (section.type !== 'cta-block') {
       try {
         const pageSpec: { focusKeyword: string; pageType: PageType } = {
           focusKeyword: page.focusKeyword,
           pageType: page.pageType,
         };
+
+        // Determine target word count based on section type
+        let targetWordCount = 200;
+        if (section.type === 'hero') {
+          targetWordCount = 100; // Hero should be concise but informative
+        } else if (section.type === 'intro') {
+          targetWordCount = 300; // Intro needs substantial content
+        } else if (section.type === 'why-choose-us') {
+          targetWordCount = 250; // Why choose us needs detail
+        } else if (section.type === 'faq-accordion') {
+          targetWordCount = 350; // FAQ needs multiple questions
+        } else if (section.type === 'case-study') {
+          targetWordCount = 200; // Case study needs detail
+        } else if (section.type === 'neighborhoods') {
+          targetWordCount = 200; // Neighborhoods list
+        } else if (section.type === 'services-grid') {
+          targetWordCount = 250; // Services overview
+        } else if (section.type === 'testimonials') {
+          targetWordCount = 200; // Testimonials with ratings
+        }
+
         section.content = await generateSectionContent(
           {
             sectionId: section.id,
             heading: section.heading || '',
             purpose: `Content for ${section.type} section`,
-            targetWordCount: 200,
+            targetWordCount: targetWordCount,
             requiredKeywordRoles: [],
             optionalKeywordRoles: [],
             localHints: [`Mention ${context.city}, ${context.state}`],
