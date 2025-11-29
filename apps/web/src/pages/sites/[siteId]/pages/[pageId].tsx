@@ -483,22 +483,25 @@ export default function PageEditor() {
             <div style={{ marginBottom: '1.5rem' }}>
               <h3 style={{ marginBottom: '0.5rem' }}>Hard Gates</h3>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem' }}>
-                {Object.entries(auditResult.hardGates).map(([gate, status]) => (
-                  <div key={gate} style={{ padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}>
-                    <div style={{ fontSize: '0.875rem', color: '#666' }}>{gate.replace('G', 'Gate ')}</div>
-                    <div
-                      style={{
-                        fontWeight: 'bold',
-                        color:
-                          status === 'PASS' ? '#28a745' :
-                          status === 'WARN' ? '#ffc107' :
-                          '#dc3545',
-                      }}
-                    >
-                      {status}
+                {Object.entries(auditResult.hardGates).map(([gate, status]) => {
+                  const gateStatus = status as 'PASS' | 'WARN' | 'FAIL';
+                  return (
+                    <div key={gate} style={{ padding: '0.5rem', border: '1px solid #ddd', borderRadius: '4px' }}>
+                      <div style={{ fontSize: '0.875rem', color: '#666' }}>{gate.replace('G', 'Gate ')}</div>
+                      <div
+                        style={{
+                          fontWeight: 'bold',
+                          color:
+                            gateStatus === 'PASS' ? '#28a745' :
+                            gateStatus === 'WARN' ? '#ffc107' :
+                            '#dc3545',
+                        }}
+                      >
+                        {gateStatus}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
