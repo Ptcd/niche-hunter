@@ -525,7 +525,7 @@ export default function PageEditor({ siteId, pageId, city, state, onPageUpdate }
           focusKeyword={page.focusKeyword}
           city={city}
           state={state}
-          currentImageUrl={page.heroImageUrl}
+          currentImageUrl={page.heroImageUrl || null}
           onClose={() => setShowImagePicker(false)}
           onSelect={() => {
             fetchPage();
