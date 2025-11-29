@@ -9,12 +9,18 @@ import { PageAuditInput, QualityScoreComponents } from './types';
 
 /**
  * Extract visible text from HTML
+ * Works with both full HTML documents and partial HTML (like WordPress post_content)
  */
 function extractVisibleText(html: string): string {
+  // Try to find body content first
   const bodyMatch = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
-  if (!bodyMatch) return '';
+  const content = bodyMatch ? bodyMatch[1] : html;
   
-  return bodyMatch[1]
+  // Also try to find main content if no body
+  const mainMatch = content.match(/<main[^>]*>([\s\S]*)<\/main>/i);
+  const mainContent = mainMatch ? mainMatch[1] : content;
+  
+  return mainContent
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
     .replace(/<[^>]+>/g, ' ')

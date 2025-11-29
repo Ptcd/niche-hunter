@@ -95,22 +95,22 @@ export function evaluateG2PageHygiene(html: string): GateStatus {
   }
 
   // Extract visible text and count words
+  // Works with both full HTML documents and partial HTML (like WordPress post_content)
   const bodyMatch = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
-  if (bodyMatch) {
-    const bodyText = bodyMatch[1]
-      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-    
-    const wordCount = bodyText.split(/\s+/).filter(w => w.length > 0).length;
-    
-    if (wordCount < 400) {
-      flags.warn = true;
-    }
-  } else {
-    flags.warn = true; // No body found
+  const mainMatch = html.match(/<main[^>]*>([\s\S]*)<\/main>/i);
+  const contentHtml = bodyMatch ? bodyMatch[1] : (mainMatch ? mainMatch[1] : html);
+  
+  const bodyText = contentHtml
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  
+  const wordCount = bodyText.split(/\s+/).filter(w => w.length > 0).length;
+  
+  if (wordCount < 400) {
+    flags.warn = true;
   }
 
   // Check for placeholder content
