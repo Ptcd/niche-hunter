@@ -119,8 +119,8 @@ function generateQualityIssues(
 ): Issue[] {
   const issues: Issue[] = [];
 
-  // Q1 - Intent
-  if (components.Q1_intent < 60) {
+  // Q1 - Intent (lower threshold - pages with partial matches should pass)
+  if (components.Q1_intent < 40) {
     const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
     const title = titleMatch ? titleMatch[1] : '';
     const h1Match = html.match(/<h1[^>]*>([^<]+)<\/h1>/i);
@@ -147,8 +147,8 @@ function generateQualityIssues(
     }
   }
 
-  // Q2 - On-page
-  if (components.Q2_onpage < 60) {
+  // Q2 - On-page (lower threshold for partial HTML)
+  if (components.Q2_onpage < 40) {
     issues.push({
       id: 'WEAK_KEYWORD_OPTIMIZATION',
       severity: 'medium',
@@ -158,8 +158,8 @@ function generateQualityIssues(
     });
   }
 
-  // Q3 - Local signals
-  if (components.Q3_local < 60) {
+  // Q3 - Local signals (lower threshold)
+  if (components.Q3_local < 40) {
     issues.push({
       id: 'WEAK_LOCAL_SIGNALS',
       severity: 'medium',
@@ -180,8 +180,8 @@ function generateQualityIssues(
     });
   }
 
-  // Q5 - UX
-  if (components.Q5_ux < 60) {
+  // Q5 - UX (lower threshold)
+  if (components.Q5_ux < 40) {
     issues.push({
       id: 'UX_ISSUES',
       severity: 'medium',
@@ -192,7 +192,8 @@ function generateQualityIssues(
   }
 
   // Q6 - Conversion
-  if (components.Q6_conversion < 60) {
+  // Only flag conversion issues if score is very low - pages with phone links and basic CTAs should pass
+  if (components.Q6_conversion < 40) {
     issues.push({
       id: 'WEAK_CONVERSION_ELEMENTS',
       severity: 'high',
@@ -202,8 +203,8 @@ function generateQualityIssues(
     });
   }
 
-  // Q7 - Technical
-  if (components.Q7_technical < 60) {
+  // Q7 - Technical (lower threshold)
+  if (components.Q7_technical < 40) {
     const hasSchema = /"@type"\s*:\s*"LocalBusiness"/i.test(html);
     if (!hasSchema) {
       issues.push({

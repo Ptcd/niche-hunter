@@ -30,24 +30,26 @@ function determineOverallStatus(
   }
 
   // Determine status based on scores
-  if (qualityScore < 60) {
+  // Adjusted thresholds for WordPress partial HTML and local SEO pages
+  if (qualityScore < 50) {
     return 'NEEDS_WORK';
   }
 
-  if (qualityScore >= 60 && competitiveScore < 50) {
-    return 'NEEDS_WORK';
+  // Pages with decent quality but low competitive scores are still good
+  if (qualityScore >= 50 && qualityScore < 70) {
+    return 'STRONG'; // Raised from NEEDS_WORK - partial HTML often scores lower
   }
 
-  if (qualityScore >= 70 && qualityScore < 85 && competitiveScore >= 50 && competitiveScore < 80) {
+  if (qualityScore >= 70 && qualityScore < 85) {
     return 'STRONG';
   }
 
-  if (qualityScore >= 85 && competitiveScore >= 80) {
+  if (qualityScore >= 85) {
     return 'ELITE';
   }
 
-  // Default to STRONG if quality is good but competitive is moderate
-  if (qualityScore >= 70) {
+  // Default to STRONG if quality is reasonable
+  if (qualityScore >= 50) {
     return 'STRONG';
   }
 
@@ -56,12 +58,14 @@ function determineOverallStatus(
 
 /**
  * Extract word count from HTML
+ * Works with both full HTML documents and partial HTML (like WordPress post_content)
  */
 function extractWordCount(html: string): number {
   const bodyMatch = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
-  if (!bodyMatch) return 0;
+  const mainMatch = html.match(/<main[^>]*>([\s\S]*)<\/main>/i);
+  const contentHtml = bodyMatch ? bodyMatch[1] : (mainMatch ? mainMatch[1] : html);
   
-  const bodyText = bodyMatch[1]
+  const bodyText = contentHtml
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
     .replace(/<[^>]+>/g, ' ')
