@@ -5,7 +5,19 @@
  */
 
 import { useState, useEffect } from 'react';
-import { generateDefaultLogoPrompt } from '@/lib/logoGenerator';
+
+/**
+ * Generate a default logo prompt template
+ * (Defined inline to avoid importing server-side OpenAI SDK)
+ */
+function generateDefaultLogoPrompt(niche: string, city?: string, state?: string): string {
+  let prompt = `Create a simple pictorial mark (icon only, absolutely no text or letters) for a ${niche} business`;
+  if (city && state) {
+    prompt += ` in ${city}, ${state}`;
+  }
+  prompt += `.\n\nStyle:\n- Pure visual symbol, no words or characters\n- Simple geometric or abstract design\n- Clean, minimal, professional\n- Works well at small sizes\n- White background\n\nCreate only the icon/symbol - no text, no brand name, no letters.`;
+  return prompt;
+}
 
 interface LogoPanelProps {
   siteId: string;
