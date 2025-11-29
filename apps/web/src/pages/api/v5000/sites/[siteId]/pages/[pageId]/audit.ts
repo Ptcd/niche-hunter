@@ -62,15 +62,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const pageUrl = `${baseUrl}/${page.slug || ''}`;
 
     // Build audit input
+    // Note: Site model doesn't have businessType, defaulting to service_area
     const pageInput = {
       url: pageUrl,
       html,
-      businessType: (site.businessType || 'service_area') as 'storefront' | 'service_area',
+      businessType: 'service_area' as 'storefront' | 'service_area',
       businessName: site.siteName || undefined,
       primaryPhone: site.trackingNumber || site.twilioNumber || '',
       targetCity: site.city,
       targetState: site.state,
-      targetCountry: 'US',
+      targetCountry: site.country || 'US',
       primaryService: site.niche.name,
       primaryKeyword: page.focusKeyword || '',
       additionalKeywords: page.supportingKeywords || undefined,
