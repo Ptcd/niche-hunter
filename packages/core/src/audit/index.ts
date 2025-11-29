@@ -35,20 +35,13 @@ function determineOverallStatus(
     return 'NEEDS_WORK';
   }
 
-  // Pages with decent quality but low competitive scores are still good
-  if (qualityScore >= 50 && qualityScore < 70) {
-    return 'STRONG'; // Raised from NEEDS_WORK - partial HTML often scores lower
-  }
-
-  if (qualityScore >= 70 && qualityScore < 85) {
-    return 'STRONG';
-  }
-
-  if (qualityScore >= 85) {
+  // Pages with 70+ quality are ELITE for our local SEO purposes
+  // Competitive edge matters less for new/rank-and-rent sites
+  if (qualityScore >= 70) {
     return 'ELITE';
   }
 
-  // Default to STRONG if quality is reasonable
+  // Pages with decent quality but low competitive scores are STRONG
   if (qualityScore >= 50) {
     return 'STRONG';
   }

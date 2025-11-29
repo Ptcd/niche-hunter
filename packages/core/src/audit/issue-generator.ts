@@ -229,8 +229,8 @@ function generateCompetitiveIssues(
 ): Issue[] {
   const issues: Issue[] = [];
 
-  // C1 - Links
-  if (components.C1_links < 50) {
+  // C1 - Links (lowered threshold - competitive metrics are hard to influence directly)
+  if (components.C1_links < 30) {
     issues.push({
       id: 'LINK_GAP_LARGE',
       severity: 'high',
@@ -238,7 +238,7 @@ function generateCompetitiveIssues(
       message: 'Top competitors have significantly more domain authority and backlinks than your site.',
       suggestedAction: 'Plan a local link campaign: sponsor local organizations, join local business directories, get listed on industry association sites, and earn citations from local news sites.',
     });
-  } else if (components.C1_links < 70) {
+  } else if (components.C1_links < 40) {
     issues.push({
       id: 'LINK_GAP_MEDIUM',
       severity: 'medium',
@@ -248,8 +248,8 @@ function generateCompetitiveIssues(
     });
   }
 
-  // C2 - Content depth
-  if (components.C2_content_vs_comp < 60) {
+  // C2 - Content depth (lowered threshold)
+  if (components.C2_content_vs_comp < 30) {
     issues.push({
       id: 'CONTENT_DEPTH_GAP',
       severity: 'medium',
@@ -259,8 +259,8 @@ function generateCompetitiveIssues(
     });
   }
 
-  // C3 - SERP features
-  if (components.C3_serp_features < 60) {
+  // C3 - SERP features (lowered threshold)
+  if (components.C3_serp_features < 30) {
     issues.push({
       id: 'MISSING_SERP_FEATURES',
       severity: 'medium',
@@ -270,8 +270,8 @@ function generateCompetitiveIssues(
     });
   }
 
-  // C4 - Brand/reviews
-  if (components.C4_brand_reviews < 60) {
+  // C4 - Brand/reviews (lowered threshold)
+  if (components.C4_brand_reviews < 30) {
     issues.push({
       id: 'WEAK_BRAND_PRESENCE',
       severity: 'medium',
