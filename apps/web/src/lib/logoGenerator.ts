@@ -44,7 +44,12 @@ export async function generateLogo(options: LogoGenerationOptions): Promise<stri
     prompt += `\n- ${promptHint}`;
   }
   
-  prompt += `\n\nStyle: Minimalist logo design, no text, just the icon/symbol. White background.`;
+  prompt += `\n\nCRITICAL RULES (MUST FOLLOW):`;
+  prompt += `\n- NO TEXT: Do not include any letters, words, numbers, or text of any kind`;
+  prompt += `\n- NO BRAND NAME: Do not spell out "${brandName}" or any words`;
+  prompt += `\n- ICON/SYMBOL ONLY: Create only a visual icon, symbol, or graphic element`;
+  prompt += `\n- NO TYPOGRAPHY: Absolutely no letters, characters, or written text`;
+  prompt += `\n\nStyle: Minimalist logo design, icon/symbol only, white background.`;
 
   try {
     const response = await openai.images.generate({

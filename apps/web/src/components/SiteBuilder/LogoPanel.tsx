@@ -82,6 +82,25 @@ export default function LogoPanel({ siteId, logoUrl, brandName, onLogoUpdate }: 
         </div>
       )}
 
+      <div style={{
+        marginBottom: '1rem',
+        padding: '1rem',
+        backgroundColor: '#fff3cd',
+        border: '1px solid #ffc107',
+        borderRadius: '4px',
+        fontSize: '0.875rem'
+      }}>
+        <strong style={{ display: 'block', marginBottom: '0.5rem', color: '#856404' }}>
+          Logo Generation Rules:
+        </strong>
+        <ul style={{ margin: 0, paddingLeft: '1.25rem', color: '#856404' }}>
+          <li>No text, letters, words, or numbers will be included</li>
+          <li>Icon/symbol only - visual graphic elements only</li>
+          <li>Works best with simple, recognizable symbols</li>
+          <li>White background for easy integration</li>
+        </ul>
+      </div>
+
       <div style={{ marginBottom: '1rem' }}>
         <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
           Style Hint (optional)
@@ -99,7 +118,7 @@ export default function LogoPanel({ siteId, logoUrl, brandName, onLogoUpdate }: 
           }}
         />
         <small style={{ color: '#666', fontSize: '0.875rem', display: 'block', marginTop: '0.25rem' }}>
-          Add style preferences to customize the logo generation
+          Add style preferences (colors, shapes, style) - do not include text or words
         </small>
       </div>
 
