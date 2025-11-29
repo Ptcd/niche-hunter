@@ -10,7 +10,8 @@ export interface Section {
   id: string;
   type: 'hero' | 'intro' | 'services-grid' | 'why-choose-us' | 'process-steps' | 
         'faq-accordion' | 'cta-block' | 'local-content' | 'testimonials' | 
-        'common-problems' | 'neighborhoods' | 'content';
+        'common-problems' | 'neighborhoods' | 'trust-badges' | 'hours' | 
+        'guarantees' | 'case-study' | 'content';
   heading?: string;
   content: string; // Raw HTML content from GPT
   metadata?: {
@@ -213,6 +214,73 @@ export function buildNeighborhoodsSection(section: Section): string {
 }
 
 /**
+ * Build trust badges section (Licensed, Insured, BBB, etc.)
+ */
+export function buildTrustBadgesSection(section: Section): string {
+  const heading = section.heading || 'Why You Can Trust Us';
+  
+  return `
+<section class="trust-badges-section">
+  <h2>${escapeHtml(heading)}</h2>
+  <div class="trust-badges">
+    ${section.content}
+  </div>
+</section>
+  `.trim();
+}
+
+/**
+ * Build business hours section
+ */
+export function buildHoursSection(section: Section, brand: BrandInfo): string {
+  const heading = section.heading || 'Business Hours';
+  
+  return `
+<section class="hours-section">
+  <h2>${escapeHtml(heading)}</h2>
+  <div class="hours-content">
+    ${section.content}
+  </div>
+  <div class="hours-contact">
+    <p>Call us at <a href="tel:${brand.phoneClean}">${escapeHtml(brand.phonePretty)}</a> for immediate assistance.</p>
+  </div>
+</section>
+  `.trim();
+}
+
+/**
+ * Build guarantees section
+ */
+export function buildGuaranteesSection(section: Section): string {
+  const heading = section.heading || 'Our Guarantee';
+  
+  return `
+<section class="guarantees-section">
+  <h2>${escapeHtml(heading)}</h2>
+  <div class="guarantees-content">
+    ${section.content}
+  </div>
+</section>
+  `.trim();
+}
+
+/**
+ * Build case study section (local project)
+ */
+export function buildCaseStudySection(section: Section): string {
+  const heading = section.heading || 'Recent Project';
+  
+  return `
+<section class="case-study-section">
+  <h2>${escapeHtml(heading)}</h2>
+  <div class="case-study-content">
+    ${section.content}
+  </div>
+</section>
+  `.trim();
+}
+
+/**
  * Build footer with NAP
  */
 export function buildFooter(brand: BrandInfo): string {
@@ -286,6 +354,14 @@ export function buildPageHtml(
         return buildCommonProblemsSection(section);
       case 'neighborhoods':
         return buildNeighborhoodsSection(section);
+      case 'trust-badges':
+        return buildTrustBadgesSection(section);
+      case 'hours':
+        return buildHoursSection(section, brand);
+      case 'guarantees':
+        return buildGuaranteesSection(section);
+      case 'case-study':
+        return buildCaseStudySection(section);
       default:
         return buildIntroSection(section);
     }

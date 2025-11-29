@@ -391,6 +391,14 @@ You are an expert local SEO copywriter for home-service businesses.
 Write engaging, conversion-focused content that builds trust and drives action.
 Always write in clear, friendly, professional US English.
 Output clean HTML content (paragraphs, lists, headings) - no markdown, no code blocks.
+
+CRITICAL SEO AUDIT REQUIREMENTS:
+- Title/H1: MUST include both service name AND city name (e.g., "HVAC Repair Milwaukee")
+- First 150 words: MUST mention both service and city together
+- Keyword placement: Primary keyword in title, H1, first paragraph, and at least one subheading (H2/H3)
+- Local signals: Include city name 5+ times and state name 2+ times throughout content
+- Keyword density: Maintain 0.5-2% keyword density (not too sparse, not stuffed)
+- Include service/location variations naturally (e.g., "Milwaukee", "MKE", "Milwaukee area")
 `;
 
   const styleGuidelines = context.promptProfile?.styleGuidelines || `
@@ -434,8 +442,20 @@ Style Guidelines:
 ${styleGuidelines}
 ${externalResourcesText}
 
-Requirements:
-- Use the primary keyword "${page.focusKeyword}" naturally 2-3 times
+SEO AUDIT REQUIREMENTS (CRITICAL):
+- Primary keyword "${page.focusKeyword}" MUST appear in:
+  * First paragraph (if this is intro/hero section)
+  * At least one subheading (H2 or H3) if this section has subheadings
+  * Naturally throughout (target 0.5-2% density - not stuffed, not too sparse)
+- Local signals REQUIRED:
+  * Mention "${context.city}" at least 3-5 times in this section
+  * Mention "${context.state}" at least 1-2 times in this section
+  * Include neighborhood names or nearby areas when relevant
+- If this is the intro/hero section: First 150 words MUST mention both "${page.focusKeyword.split(' ')[0]}" and "${context.city}" together
+- Include service/location variations naturally (e.g., "${context.city}", "${context.state}", city abbreviations)
+
+Content Requirements:
+- Use the primary keyword "${page.focusKeyword}" naturally 2-4 times (depending on section length)
 - Include local references to ${context.city}, ${context.state}
 - Write ${skeleton.targetWordCount} words (strictly within 10% tolerance - this is critical)
 - Make it engaging and conversion-focused
@@ -483,6 +503,7 @@ async function generateDefaultSections(
 
   switch (pageType) {
     case PageType.HOME:
+      // Audit-optimized section stack for homepage
       sections.push(
         {
           id: 'hero',
@@ -491,26 +512,70 @@ async function generateDefaultSections(
           content: `Professional ${context.niche} services in ${context.city}, ${context.state}. Trusted by homeowners for quality work and exceptional service.`,
         },
         {
+          id: 'intro',
+          type: 'intro',
+          heading: `Expert ${context.niche} Services in ${context.city}`,
+          content: `We provide professional ${context.niche} services throughout ${context.city}, ${context.state}. Our experienced team delivers quality results you can trust.`,
+        },
+        {
           id: 'services',
           type: 'services-grid',
           heading: 'Our Services',
           content: `Expert ${context.niche} services\nProfessional installation\nEmergency repairs\nMaintenance plans\nQuality guarantees`,
         },
         {
-          id: 'trust',
+          id: 'neighborhoods',
+          type: 'neighborhoods',
+          heading: `Areas We Serve in ${context.city}`,
+          content: `We proudly serve ${context.city}, ${context.state} and surrounding neighborhoods.`,
+        },
+        {
+          id: 'why-choose-us',
           type: 'why-choose-us',
+          heading: 'Why Choose Us',
           content: '',
+        },
+        {
+          id: 'trust-badges',
+          type: 'trust-badges',
+          heading: 'Licensed & Insured',
+          content: `Fully licensed and insured\nBBB Accredited\nYears of experience\nSatisfaction guaranteed`,
+        },
+        {
+          id: 'case-study',
+          type: 'case-study',
+          heading: `Recent ${context.city} Project`,
+          content: `We recently completed a major ${context.niche} project in ${context.city}, ${context.state}.`,
+        },
+        {
+          id: 'guarantees',
+          type: 'guarantees',
+          heading: 'Our Guarantee',
+          content: `100% Satisfaction Guarantee\nFree Estimates\nLifetime Warranty on Parts\n24/7 Emergency Service`,
         },
         {
           id: 'faq',
           type: 'faq-accordion',
           heading: 'Frequently Asked Questions',
-          content: `Q: What areas do you serve?\nA: We proudly serve ${context.city}, ${context.state} and surrounding areas.\n\nQ: Are you licensed and insured?\nA: Yes, we are fully licensed and insured for your protection.\n\nQ: Do you offer emergency services?\nA: Yes, we provide 24/7 emergency ${context.niche} services.`,
+          content: `Q: What areas do you serve?\nA: We proudly serve ${context.city}, ${context.state} and surrounding areas.\n\nQ: Are you licensed and insured?\nA: Yes, we are fully licensed and insured for your protection.\n\nQ: Do you offer emergency services?\nA: Yes, we provide 24/7 emergency ${context.niche} services.\n\nQ: Do you offer free estimates?\nA: Yes, we provide free, no-obligation estimates for all projects.`,
+        },
+        {
+          id: 'hours',
+          type: 'hours',
+          heading: 'Business Hours',
+          content: `Monday - Friday: 8:00 AM - 6:00 PM\nSaturday: 9:00 AM - 4:00 PM\nSunday: Emergency Service Only\n24/7 Emergency Service Available`,
+        },
+        {
+          id: 'cta-footer',
+          type: 'cta-block',
+          heading: 'Ready to Get Started?',
+          content: `Call us today at ${context.brand.phonePretty} for a free estimate!`,
         }
       );
       break;
 
     case PageType.CORE_SERVICE:
+      // Audit-optimized section stack for service pages
       sections.push(
         {
           id: 'hero',
@@ -519,15 +584,46 @@ async function generateDefaultSections(
           content: `Expert ${page.focusKeyword} services for ${context.city} homeowners. Professional, reliable, and affordable.`,
         },
         {
-          id: 'content',
-          type: 'content',
-          heading: `Why Choose Us for ${page.focusKeyword}`,
+          id: 'intro',
+          type: 'intro',
+          heading: `Professional ${page.focusKeyword} in ${context.city}`,
           content: `We specialize in ${page.focusKeyword} services throughout ${context.city}, ${context.state}. Our experienced team delivers quality results you can trust.`,
         },
         {
-          id: 'trust',
+          id: 'neighborhoods',
+          type: 'neighborhoods',
+          heading: `Areas We Serve for ${page.focusKeyword}`,
+          content: `We provide ${page.focusKeyword} services in ${context.city}, ${context.state} and surrounding neighborhoods.`,
+        },
+        {
+          id: 'why-choose-us',
           type: 'why-choose-us',
+          heading: `Why Choose Us for ${page.focusKeyword}`,
           content: '',
+        },
+        {
+          id: 'trust-badges',
+          type: 'trust-badges',
+          heading: 'Licensed & Insured',
+          content: `Fully licensed and insured\nBBB Accredited\nYears of experience`,
+        },
+        {
+          id: 'guarantees',
+          type: 'guarantees',
+          heading: 'Our Guarantee',
+          content: `100% Satisfaction Guarantee\nFree Estimates\nLifetime Warranty`,
+        },
+        {
+          id: 'faq',
+          type: 'faq-accordion',
+          heading: 'Frequently Asked Questions',
+          content: `Q: Do you offer ${page.focusKeyword} in ${context.city}?\nA: Yes, we provide ${page.focusKeyword} services throughout ${context.city}, ${context.state}.\n\nQ: Are you licensed and insured?\nA: Yes, we are fully licensed and insured.\n\nQ: Do you offer free estimates?\nA: Yes, we provide free, no-obligation estimates.`,
+        },
+        {
+          id: 'cta-footer',
+          type: 'cta-block',
+          heading: 'Ready to Get Started?',
+          content: `Call us today at ${context.brand.phonePretty} for a free estimate!`,
         }
       );
       break;
