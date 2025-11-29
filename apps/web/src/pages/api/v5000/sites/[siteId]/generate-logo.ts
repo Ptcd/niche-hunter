@@ -15,7 +15,7 @@ async function handler(req: NextApiRequest & { auth: any }, res: NextApiResponse
   }
 
   const { siteId } = req.query;
-  const { promptHint, rules } = req.body;
+  const { customPrompt, promptHint, rules } = req.body;
 
   if (!siteId || typeof siteId !== 'string') {
     return res.status(400).json({ error: 'Invalid siteId' });
@@ -48,6 +48,7 @@ async function handler(req: NextApiRequest & { auth: any }, res: NextApiResponse
       niche: site.niche.name,
       city: site.city,
       state: site.state,
+      customPrompt: customPrompt || undefined,
       promptHint: promptHint || undefined,
       rules: rules || undefined,
     });

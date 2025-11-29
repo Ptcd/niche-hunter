@@ -1742,6 +1742,9 @@ export default function SiteFactoryDetailPage() {
         siteId={siteId as string}
         logoUrl={site.logoUrl || null}
         brandName={site.siteName || `${site.city} ${site.niche.name}`}
+        niche={site.niche.name}
+        city={site.city}
+        state={site.state}
         onLogoUpdate={fetchSite}
       />
 

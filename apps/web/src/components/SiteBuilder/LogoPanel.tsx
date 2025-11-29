@@ -4,43 +4,52 @@
  * Displays site logo with regenerate functionality
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { generateDefaultLogoPrompt } from '@/lib/logoGenerator';
 
 interface LogoPanelProps {
   siteId: string;
   logoUrl: string | null;
   brandName: string;
+  niche: string;
+  city?: string;
+  state?: string;
   onLogoUpdate: () => void;
 }
 
-export default function LogoPanel({ siteId, logoUrl, brandName, onLogoUpdate }: LogoPanelProps) {
-  const [promptHint, setPromptHint] = useState('');
+export default function LogoPanel({ siteId, logoUrl, brandName, niche, city, state, onLogoUpdate }: LogoPanelProps) {
+  const [prompt, setPrompt] = useState('');
   const [generating, setGenerating] = useState(false);
-  const [rules, setRules] = useState({
-    noText: true,
-    whiteBackground: true,
-    iconOnly: true,
-  });
+
+  // Generate default prompt on mount
+  useEffect(() => {
+    const defaultPrompt = generateDefaultLogoPrompt(niche, city, state);
+    setPrompt(defaultPrompt);
+  }, [niche, city, state]);
+
+  const handleReset = () => {
+    const defaultPrompt = generateDefaultLogoPrompt(niche, city, state);
+    setPrompt(defaultPrompt);
+  };
 
   const handleGenerate = async () => {
+    if (!prompt.trim()) {
+      alert('Please enter a prompt');
+      return;
+    }
+
     setGenerating(true);
     try {
       const res = await fetch(`/api/v5000/sites/${siteId}/generate-logo`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          promptHint: promptHint.trim() || undefined,
-          rules: {
-            noText: rules.noText,
-            whiteBackground: rules.whiteBackground,
-            iconOnly: rules.iconOnly,
-          },
+          customPrompt: prompt.trim(),
         }),
       });
 
       if (res.ok) {
         onLogoUpdate();
-        setPromptHint(''); // Clear hint after successful generation
       } else {
         const error = await res.json();
         alert(error.error || 'Failed to generate logo');
@@ -92,66 +101,44 @@ export default function LogoPanel({ siteId, logoUrl, brandName, onLogoUpdate }: 
         </div>
       )}
 
-      <div style={{
-        marginBottom: '1rem',
-        padding: '1rem',
-        backgroundColor: '#f8f9fa',
-        border: '1px solid #dee2e6',
-        borderRadius: '4px',
-        fontSize: '0.875rem'
-      }}>
-        <strong style={{ display: 'block', marginBottom: '0.75rem', color: '#495057' }}>
-          Logo Generation Rules (Toggle to enable/disable):
-        </strong>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', color: '#495057' }}>
-            <input
-              type="checkbox"
-              checked={rules.noText}
-              onChange={(e) => setRules({ ...rules, noText: e.target.checked })}
-              style={{ marginRight: '0.5rem', cursor: 'pointer' }}
-            />
-            <span>No text, letters, words, or numbers</span>
-          </label>
-          <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', color: '#495057' }}>
-            <input
-              type="checkbox"
-              checked={rules.iconOnly}
-              onChange={(e) => setRules({ ...rules, iconOnly: e.target.checked })}
-              style={{ marginRight: '0.5rem', cursor: 'pointer' }}
-            />
-            <span>Icon/symbol only (no full logo designs)</span>
-          </label>
-          <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', color: '#495057' }}>
-            <input
-              type="checkbox"
-              checked={rules.whiteBackground}
-              onChange={(e) => setRules({ ...rules, whiteBackground: e.target.checked })}
-              style={{ marginRight: '0.5rem', cursor: 'pointer' }}
-            />
-            <span>White background (uncheck for transparent)</span>
-          </label>
-        </div>
-      </div>
-
       <div style={{ marginBottom: '1rem' }}>
-        <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-          Style Hint (optional)
-        </label>
-        <input
-          type="text"
-          value={promptHint}
-          onChange={(e) => setPromptHint(e.target.value)}
-          placeholder="e.g., modern, blue, minimalist, circular"
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+          <label style={{ fontWeight: 'bold', display: 'block' }}>
+            DALL-E Prompt (editable)
+          </label>
+          <button
+            onClick={handleReset}
+            style={{
+              padding: '0.25rem 0.75rem',
+              backgroundColor: '#6c757d',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '0.875rem',
+            }}
+          >
+            Reset to Default
+          </button>
+        </div>
+        <textarea
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          placeholder="Enter your DALL-E prompt here..."
           style={{
             width: '100%',
-            padding: '0.5rem',
+            minHeight: '200px',
+            padding: '0.75rem',
             border: '1px solid #ddd',
             borderRadius: '4px',
+            fontFamily: 'monospace',
+            fontSize: '0.875rem',
+            lineHeight: '1.5',
+            resize: 'vertical',
           }}
         />
         <small style={{ color: '#666', fontSize: '0.875rem', display: 'block', marginTop: '0.25rem' }}>
-          Add style preferences (colors, shapes, style) - do not include text or words
+          Edit the prompt above to customize logo generation. The default prompt is optimized to avoid text in logos.
         </small>
       </div>
 
