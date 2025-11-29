@@ -16,6 +16,11 @@ interface LogoPanelProps {
 export default function LogoPanel({ siteId, logoUrl, brandName, onLogoUpdate }: LogoPanelProps) {
   const [promptHint, setPromptHint] = useState('');
   const [generating, setGenerating] = useState(false);
+  const [rules, setRules] = useState({
+    noText: true,
+    whiteBackground: true,
+    iconOnly: true,
+  });
 
   const handleGenerate = async () => {
     setGenerating(true);
@@ -25,6 +30,11 @@ export default function LogoPanel({ siteId, logoUrl, brandName, onLogoUpdate }: 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           promptHint: promptHint.trim() || undefined,
+          rules: {
+            noText: rules.noText,
+            whiteBackground: rules.whiteBackground,
+            iconOnly: rules.iconOnly,
+          },
         }),
       });
 
@@ -85,20 +95,43 @@ export default function LogoPanel({ siteId, logoUrl, brandName, onLogoUpdate }: 
       <div style={{
         marginBottom: '1rem',
         padding: '1rem',
-        backgroundColor: '#fff3cd',
-        border: '1px solid #ffc107',
+        backgroundColor: '#f8f9fa',
+        border: '1px solid #dee2e6',
         borderRadius: '4px',
         fontSize: '0.875rem'
       }}>
-        <strong style={{ display: 'block', marginBottom: '0.5rem', color: '#856404' }}>
-          Logo Generation Rules:
+        <strong style={{ display: 'block', marginBottom: '0.75rem', color: '#495057' }}>
+          Logo Generation Rules (Toggle to enable/disable):
         </strong>
-        <ul style={{ margin: 0, paddingLeft: '1.25rem', color: '#856404' }}>
-          <li>No text, letters, words, or numbers will be included</li>
-          <li>Icon/symbol only - visual graphic elements only</li>
-          <li>Works best with simple, recognizable symbols</li>
-          <li>White background for easy integration</li>
-        </ul>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', color: '#495057' }}>
+            <input
+              type="checkbox"
+              checked={rules.noText}
+              onChange={(e) => setRules({ ...rules, noText: e.target.checked })}
+              style={{ marginRight: '0.5rem', cursor: 'pointer' }}
+            />
+            <span>No text, letters, words, or numbers</span>
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', color: '#495057' }}>
+            <input
+              type="checkbox"
+              checked={rules.iconOnly}
+              onChange={(e) => setRules({ ...rules, iconOnly: e.target.checked })}
+              style={{ marginRight: '0.5rem', cursor: 'pointer' }}
+            />
+            <span>Icon/symbol only (no full logo designs)</span>
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', color: '#495057' }}>
+            <input
+              type="checkbox"
+              checked={rules.whiteBackground}
+              onChange={(e) => setRules({ ...rules, whiteBackground: e.target.checked })}
+              style={{ marginRight: '0.5rem', cursor: 'pointer' }}
+            />
+            <span>White background (uncheck for transparent)</span>
+          </label>
+        </div>
       </div>
 
       <div style={{ marginBottom: '1rem' }}>

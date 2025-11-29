@@ -10,12 +10,19 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+export interface LogoRules {
+  noText?: boolean; // Default: true
+  whiteBackground?: boolean; // Default: true
+  iconOnly?: boolean; // Default: true
+}
+
 export interface LogoGenerationOptions {
   brandName: string;
   niche: string;
   city?: string;
   state?: string;
   promptHint?: string; // Optional user hint like "modern, blue, minimalist"
+  rules?: LogoRules; // Optional rules configuration
 }
 
 /**
@@ -25,7 +32,12 @@ export interface LogoGenerationOptions {
  * @returns URL to the generated logo image
  */
 export async function generateLogo(options: LogoGenerationOptions): Promise<string> {
-  const { brandName, niche, city, state, promptHint } = options;
+  const { brandName, niche, city, state, promptHint, rules } = options;
+
+  // Default rules (all enabled by default)
+  const noText = rules?.noText !== false; // Default: true
+  const whiteBackground = rules?.whiteBackground !== false; // Default: true
+  const iconOnly = rules?.iconOnly !== false; // Default: true
 
   // Build the prompt
   let prompt = `Create a professional logo for "${brandName}", a ${niche} business`;
@@ -44,12 +56,38 @@ export async function generateLogo(options: LogoGenerationOptions): Promise<stri
     prompt += `\n- ${promptHint}`;
   }
   
-  prompt += `\n\nCRITICAL RULES (MUST FOLLOW):`;
-  prompt += `\n- NO TEXT: Do not include any letters, words, numbers, or text of any kind`;
-  prompt += `\n- NO BRAND NAME: Do not spell out "${brandName}" or any words`;
-  prompt += `\n- ICON/SYMBOL ONLY: Create only a visual icon, symbol, or graphic element`;
-  prompt += `\n- NO TYPOGRAPHY: Absolutely no letters, characters, or written text`;
-  prompt += `\n\nStyle: Minimalist logo design, icon/symbol only, white background.`;
+  // Apply rules conditionally
+  const rulesList: string[] = [];
+  
+  if (noText) {
+    rulesList.push(`NO TEXT: Do not include any letters, words, numbers, or text of any kind`);
+    rulesList.push(`NO BRAND NAME: Do not spell out "${brandName}" or any words`);
+    rulesList.push(`NO TYPOGRAPHY: Absolutely no letters, characters, or written text`);
+  }
+  
+  if (iconOnly) {
+    rulesList.push(`ICON/SYMBOL ONLY: Create only a visual icon, symbol, or graphic element`);
+  }
+  
+  if (rulesList.length > 0) {
+    prompt += `\n\nCRITICAL RULES (MUST FOLLOW):`;
+    rulesList.forEach(rule => {
+      prompt += `\n- ${rule}`;
+    });
+  }
+  
+  // Background specification
+  let styleDescription = `Minimalist logo design`;
+  if (iconOnly) {
+    styleDescription += `, icon/symbol only`;
+  }
+  if (whiteBackground) {
+    styleDescription += `, white background`;
+  } else {
+    styleDescription += `, transparent background`;
+  }
+  
+  prompt += `\n\nStyle: ${styleDescription}.`;
 
   try {
     const response = await openai.images.generate({

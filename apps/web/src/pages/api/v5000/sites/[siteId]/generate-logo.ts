@@ -15,7 +15,7 @@ async function handler(req: NextApiRequest & { auth: any }, res: NextApiResponse
   }
 
   const { siteId } = req.query;
-  const { promptHint } = req.body;
+  const { promptHint, rules } = req.body;
 
   if (!siteId || typeof siteId !== 'string') {
     return res.status(400).json({ error: 'Invalid siteId' });
@@ -49,6 +49,7 @@ async function handler(req: NextApiRequest & { auth: any }, res: NextApiResponse
       city: site.city,
       state: site.state,
       promptHint: promptHint || undefined,
+      rules: rules || undefined,
     });
 
     // Update site with logo URL and prompt hint
