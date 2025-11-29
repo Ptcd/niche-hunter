@@ -5,9 +5,9 @@
  */
 
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { withAuth } from '../../../../../../../../lib/auth/withAuth';
+import { withAuth } from '../../../../../../../../../lib/auth/withAuth';
 import { prisma } from '@niche-hunter/db';
-import { searchUnsplashPhotos } from '../../../../../../../../lib/unsplashClient';
+import { searchUnsplashPhotos } from '../../../../../../../../../lib/unsplashClient';
 
 async function handler(req: NextApiRequest & { auth: any }, res: NextApiResponse) {
   if (req.method !== 'GET') {

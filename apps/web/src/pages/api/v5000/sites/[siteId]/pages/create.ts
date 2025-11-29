@@ -5,7 +5,7 @@
  */
 
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { withAuth } from '../../../../../../lib/auth/withAuth';
+import { withAuth } from '../../../../../../../lib/auth/withAuth';
 import { prisma } from '@niche-hunter/db';
 import { PageType } from '@prisma/client';
 
