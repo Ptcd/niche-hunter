@@ -96,17 +96,15 @@ function generateHardGateIssues(
       message: 'This page is 95%+ identical to another city page on your site (doorway page risk).',
       suggestedAction: 'Rewrite major sections with city-specific details: local projects, neighborhoods served, city-specific regulations, or local testimonials.',
     });
+  } else if (hardGates.G4_duplicate_content === 'WARN') {
+    issues.push({
+      id: 'HEAVY_BOILERPLATE',
+      severity: 'medium',
+      area: 'content',
+      message: 'This page is 80-95% similar to other location pages, indicating heavy template reuse.',
+      suggestedAction: `Add at least 2-3 unique sections specific to ${input.targetCity}: recent local projects, neighborhoods you serve, or local market insights.`,
+    });
   }
-  // HEAVY_BOILERPLATE issue removed to achieve 100/100 score
-  // else if (hardGates.G4_duplicate_content === 'WARN') {
-  //   issues.push({
-  //     id: 'HEAVY_BOILERPLATE',
-  //     severity: 'medium',
-  //     area: 'content',
-  //     message: 'This page is 80-95% similar to other location pages, indicating heavy template reuse.',
-  //     suggestedAction: `Add at least 2-3 unique sections specific to ${input.targetCity}: recent local projects, neighborhoods you serve, or local market insights.`,
-  //   });
-  // }
 
   return issues;
 }
@@ -231,8 +229,7 @@ function generateCompetitiveIssues(
 ): Issue[] {
   const issues: Issue[] = [];
 
-  // C1 - Links (competitive issues removed to achieve 100/100 score)
-  // Only keep the large gap issue for very low scores
+  // C1 - Links (lowered threshold - competitive metrics are hard to influence directly)
   if (components.C1_links < 30) {
     issues.push({
       id: 'LINK_GAP_LARGE',
@@ -241,53 +238,48 @@ function generateCompetitiveIssues(
       message: 'Top competitors have significantly more domain authority and backlinks than your site.',
       suggestedAction: 'Plan a local link campaign: sponsor local organizations, join local business directories, get listed on industry association sites, and earn citations from local news sites.',
     });
+  } else if (components.C1_links < 40) {
+    issues.push({
+      id: 'LINK_GAP_MEDIUM',
+      severity: 'medium',
+      area: 'links',
+      message: 'Competitors have about 2x your referring domains.',
+      suggestedAction: 'Earn 5-10 quality local links through sponsorships, directory listings, and industry partnerships.',
+    });
   }
-  // LINK_GAP_MEDIUM removed - threshold set to 0 (never trigger)
-  // else if (components.C1_links < 70) {
-  //   issues.push({
-  //     id: 'LINK_GAP_MEDIUM',
-  //     severity: 'medium',
-  //     area: 'links',
-  //     message: 'Competitors have about 2x your referring domains.',
-  //     suggestedAction: 'Earn 5-10 quality local links through sponsorships, directory listings, and industry partnerships.',
-  //   });
-  // }
 
-  // C2 - Content depth (removed to achieve 100/100 score)
-  // CONTENT_DEPTH_GAP removed - threshold set to 0 (never trigger)
-  // if (components.C2_content_vs_comp < 60) {
-  //   issues.push({
-  //     id: 'CONTENT_DEPTH_GAP',
-  //     severity: 'medium',
-  //     area: 'content',
-  //     message: 'Your content is shorter or less comprehensive than top competitors.',
-  //     suggestedAction: 'Expand content to match or exceed competitor depth. Add sections on pricing, service areas, FAQs, case studies, and guarantees.',
-  //   });
-  // }
+  // C2 - Content depth (lowered threshold)
+  if (components.C2_content_vs_comp < 30) {
+    issues.push({
+      id: 'CONTENT_DEPTH_GAP',
+      severity: 'medium',
+      area: 'content',
+      message: 'Your content is shorter or less comprehensive than top competitors.',
+      suggestedAction: 'Expand content to match or exceed competitor depth. Add sections on pricing, service areas, FAQs, case studies, and guarantees.',
+    });
+  }
 
-  // C3 - SERP features (removed to achieve 100/100 score)
-  // MISSING_SERP_FEATURES removed - threshold set to 0 (never trigger)
-  // if (components.C3_serp_features < 60) {
-  //   issues.push({
-  //     id: 'MISSING_SERP_FEATURES',
-  //     severity: 'medium',
-  //     area: 'technical',
-  //     message: 'Several top results show rich snippets (review stars, FAQ), but your page does not.',
-  //     suggestedAction: 'Add an FAQ section with FAQPage schema, and include review schema markup to increase SERP visibility.',
-  //   });
-  // }
+  // C3 - SERP features (lowered threshold)
+  if (components.C3_serp_features < 30) {
+    issues.push({
+      id: 'MISSING_SERP_FEATURES',
+      severity: 'medium',
+      area: 'technical',
+      message: 'Several top results show rich snippets (review stars, FAQ), but your page does not.',
+      suggestedAction: 'Add an FAQ section with FAQPage schema, and include review schema markup to increase SERP visibility.',
+    });
+  }
 
-  // C4 - Brand/reviews (removed to achieve 100/100 score)
-  // WEAK_BRAND_PRESENCE removed - threshold set to 0 (never trigger)
-  // if (components.C4_brand_reviews < 60) {
-  //   issues.push({
-  //     id: 'WEAK_BRAND_PRESENCE',
-  //     severity: 'medium',
-  //     area: 'conversion',
-  //     message: 'Your page lacks trust signals compared to competitors.',
-  //     suggestedAction: 'Add customer testimonials, display review ratings, show licensing badges, and include guarantees or warranties.',
-  //   });
-  // }
+  // C4 - Brand/reviews (lowered threshold)
+  if (components.C4_brand_reviews < 30) {
+    issues.push({
+      id: 'WEAK_BRAND_PRESENCE',
+      severity: 'medium',
+      area: 'conversion',
+      message: 'Your page lacks trust signals compared to competitors.',
+      suggestedAction: 'Add customer testimonials, display review ratings, show licensing badges, and include guarantees or warranties.',
+    });
+  }
 
   return issues;
 }

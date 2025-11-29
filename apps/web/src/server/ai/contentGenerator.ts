@@ -203,7 +203,7 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
       });
     }
     
-    // CRITICAL: Always add testimonials section for SEO audit requirements
+    // CRITICAL: Always add testimonials section for SEO audit requirements (WEAK_BRAND_PRESENCE fix)
     const hasTestimonialsSection = sections.some(s => s.type === 'testimonials' || s.id === 'testimonials');
     if (!hasTestimonialsSection) {
       sections.push({
@@ -215,7 +215,7 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
       });
     }
     
-    // CRITICAL: Always add trust badges section for brand presence
+    // CRITICAL: Always add trust badges section for brand presence (WEAK_BRAND_PRESENCE fix)
     const hasTrustBadges = sections.some(s => s.type === 'trust-badges' || s.id === 'trust-badges');
     if (!hasTrustBadges) {
       sections.push({
@@ -224,6 +224,106 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
         heading: 'Why Trust Us',
         content: `Licensed & Insured in ${context.state}\nLocally Owned & Operated\n100% Satisfaction Guaranteed\n24/7 Emergency Service Available\nFree Estimates on All Work`,
         metadata: { targetWordCount: 50 },
+      });
+    }
+    
+    // CRITICAL: Always add FAQ section for SERP features (MISSING_SERP_FEATURES fix)
+    const hasFAQSection = sections.some(s => s.type === 'faq-accordion' || s.id === 'faq' || s.id?.includes('faq'));
+    if (!hasFAQSection) {
+      // Generate city-specific FAQ content
+      const faqContent = await generateSectionContent(
+        {
+          sectionId: 'faq',
+          heading: `Frequently Asked Questions About ${page.focusKeyword} in ${context.city}`,
+          purpose: `Generate 5-7 FAQ questions and answers specific to ${page.focusKeyword} in ${context.city}, ${context.state}. Include city-specific details like neighborhoods, local regulations, or area-specific concerns.`,
+          targetWordCount: 400, // More content for depth (CONTENT_DEPTH_GAP fix)
+          requiredKeywordRoles: [],
+          optionalKeywordRoles: [],
+          localHints: [
+            `Mention specific neighborhoods in ${context.city}`,
+            `Include ${context.city}-specific regulations or requirements`,
+            `Reference local landmarks or areas in ${context.city}`,
+            `Make answers unique to ${context.city}, not generic`,
+          ],
+        },
+        context,
+        page,
+        model,
+        externalResources
+      );
+      
+      sections.push({
+        id: 'faq',
+        type: 'faq-accordion',
+        heading: `Frequently Asked Questions About ${page.focusKeyword} in ${context.city}`,
+        content: faqContent,
+        metadata: { targetWordCount: 400 },
+      });
+    }
+    
+    // CRITICAL: Add city-specific case study section for uniqueness (HEAVY_BOILERPLATE fix)
+    const hasCaseStudy = sections.some(s => s.type === 'case-study' || s.id?.includes('case'));
+    if (!hasCaseStudy) {
+      const caseStudyContent = await generateSectionContent(
+        {
+          sectionId: 'case_study',
+          heading: `Recent ${page.focusKeyword} Project in ${context.city}`,
+          purpose: `Describe a specific, detailed project completed in ${context.city}. Include neighborhood name, specific challenges, solutions, and results. Make this 100% unique to ${context.city} - include real neighborhood names, local landmarks, or city-specific details.`,
+          targetWordCount: 300, // More content for depth
+          requiredKeywordRoles: [],
+          optionalKeywordRoles: [],
+          localHints: [
+            `Mention a specific neighborhood in ${context.city} (e.g., Downtown ${context.city}, ${context.city} Heights, etc.)`,
+            `Include a specific street or area name in ${context.city}`,
+            `Reference local weather patterns, regulations, or conditions specific to ${context.city}`,
+            `Make this story unique - no generic template language`,
+          ],
+        },
+        context,
+        page,
+        model,
+        externalResources
+      );
+      
+      sections.push({
+        id: 'case_study',
+        type: 'case-study',
+        heading: `Recent ${page.focusKeyword} Project in ${context.city}`,
+        content: caseStudyContent,
+        metadata: { targetWordCount: 300 },
+      });
+    }
+    
+    // CRITICAL: Add neighborhoods section with specific areas for uniqueness (HEAVY_BOILERPLATE fix)
+    const hasNeighborhoods = sections.some(s => s.type === 'neighborhoods' || s.id?.includes('neighborhood'));
+    if (!hasNeighborhoods) {
+      const neighborhoodsContent = await generateSectionContent(
+        {
+          sectionId: 'neighborhoods',
+          heading: `Areas We Serve in ${context.city}, ${context.state}`,
+          purpose: `List 8-12 specific neighborhoods, districts, or areas within ${context.city} where services are provided. Include brief descriptions of each area. Make this unique to ${context.city} - use real neighborhood names.`,
+          targetWordCount: 250, // More content for depth
+          requiredKeywordRoles: [],
+          optionalKeywordRoles: [],
+          localHints: [
+            `List real neighborhood names in ${context.city} (research actual neighborhoods)`,
+            `Include zip codes or districts specific to ${context.city}`,
+            `Mention local landmarks or business districts in ${context.city}`,
+            `Make this list unique to ${context.city} - no generic "downtown" or "suburbs"`,
+          ],
+        },
+        context,
+        page,
+        model,
+        externalResources
+      );
+      
+      sections.push({
+        id: 'neighborhoods',
+        type: 'neighborhoods',
+        heading: `Areas We Serve in ${context.city}, ${context.state}`,
+        content: neighborhoodsContent,
+        metadata: { targetWordCount: 250 },
       });
     }
   } else {
@@ -548,7 +648,17 @@ SEO AUDIT REQUIREMENTS (CRITICAL - MUST FOLLOW):
   * FIRST SENTENCE MUST be: "${page.focusKeyword} services in ${context.city}, ${context.state}..."
   * First 150 words MUST mention both "${page.focusKeyword.split(' ')[0]}" and "${context.city}" together
 - Include service/location variations naturally (e.g., "${context.city}", "${context.state}", city abbreviations)
-- UNIQUENESS: Make this content specific to ${context.city} - avoid generic template language. Include city-specific details that make this page unique from other location pages.
+- UNIQUENESS (CRITICAL - HEAVY_BOILERPLATE FIX): Make this content 100% unique to ${context.city} - avoid ANY generic template language that could appear on other city pages. REQUIRED city-specific elements:
+  * Specific neighborhood names within ${context.city} (e.g., "Downtown ${context.city}", "${context.city} Heights", "${context.city} West", etc.)
+  * Local landmarks, parks, or well-known areas in ${context.city}
+  * City-specific regulations, codes, or requirements (if applicable)
+  * Local weather patterns or conditions unique to ${context.city}
+  * Specific streets, districts, or business areas in ${context.city}
+  * Local market insights or trends specific to ${context.city}
+  * References to nearby cities or regions that make sense for ${context.city}
+  * If this is a case study: Include a specific project location (neighborhood, street area, or landmark) in ${context.city}
+  * NEVER use generic phrases like "our city" or "local area" - always use "${context.city}" by name
+  * Each paragraph should contain at least one city-specific reference
 
 Content Requirements:
 - Use the primary keyword "${page.focusKeyword}" naturally 2-4 times (depending on section length)
@@ -825,15 +935,15 @@ async function generateDefaultSections(
         if (section.type === 'hero') {
           targetWordCount = 100; // Hero should be concise but informative
         } else if (section.type === 'intro') {
-          targetWordCount = 300; // Intro needs substantial content
+          targetWordCount = 400; // Intro needs substantial content + depth (CONTENT_DEPTH_GAP fix)
         } else if (section.type === 'why-choose-us') {
-          targetWordCount = 250; // Why choose us needs detail
+          targetWordCount = 350; // Why choose us needs detail + depth (CONTENT_DEPTH_GAP fix)
         } else if (section.type === 'faq-accordion') {
-          targetWordCount = 350; // FAQ needs multiple questions
+          targetWordCount = 500; // FAQ needs multiple questions + depth (CONTENT_DEPTH_GAP fix)
         } else if (section.type === 'case-study') {
-          targetWordCount = 200; // Case study needs detail
+          targetWordCount = 350; // Case study needs detail + depth (CONTENT_DEPTH_GAP fix)
         } else if (section.type === 'neighborhoods') {
-          targetWordCount = 200; // Neighborhoods list
+          targetWordCount = 300; // Neighborhoods list + depth (CONTENT_DEPTH_GAP fix)
         } else if (section.type === 'services-grid') {
           targetWordCount = 250; // Services overview
         } else if (section.type === 'testimonials') {
