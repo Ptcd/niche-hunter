@@ -18,9 +18,19 @@ function replaceTokens(
   let result = template;
   
   // Get keyword values from roles
-  const primaryService = context.keywordRoles.get('primary_service')?.[0] || context.focusKeyword;
-  const primaryServiceCity = context.keywordRoles.get('primary_service_city')?.[0] || `${primaryService} ${context.city}`;
-  const serviceCategory = context.keywordRoles.get('service_category')?.[0] || context.niche;
+  // Extract service name from focus keyword if it contains " in " (e.g., "ac repair in Wesley Chapel" -> "ac repair")
+  const focusKeywordService = context.focusKeyword?.split(' in ')[0]?.trim() || '';
+  
+  const primaryService = context.keywordRoles.get('primary_service')?.[0] || 
+                         focusKeywordService || 
+                         context.focusKeyword || 
+                         context.niche;
+  const primaryServiceCity = context.keywordRoles.get('primary_service_city')?.[0] || 
+                             (focusKeywordService ? `${focusKeywordService} ${context.city}` : `${primaryService} ${context.city}`);
+  const serviceCategory = context.keywordRoles.get('service_category')?.[0] || 
+                          focusKeywordService || 
+                          context.focusKeyword || 
+                          context.niche;
   const brandName = context.brandName || context.niche;
   
   // Replace tokens

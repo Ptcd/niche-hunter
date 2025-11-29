@@ -35,15 +35,10 @@ export interface BrandInfo {
  * H1 must contain focus keyword + city for SEO audit
  */
 export function buildHeroSection(section: Section, brand: BrandInfo, focusKeyword?: string): string {
-  // Use focus keyword in H1 if provided, otherwise use section heading
-  let heading = section.heading || `${brand.name} - ${brand.city}, ${brand.state}`;
-  
-  // If focus keyword provided and heading doesn't contain it, update heading
-  if (focusKeyword && !heading.toLowerCase().includes(focusKeyword.toLowerCase().split(' ')[0])) {
-    // Extract service name from focus keyword (e.g., "ac repair" from "ac repair in Wesley Chapel")
-    const servicePart = focusKeyword.split(' in ')[0] || focusKeyword.split(' ').slice(0, -2).join(' ');
-    heading = `${servicePart} in ${brand.city}, ${brand.state}`;
-  }
+  // Always use focus keyword in H1 if provided
+  const heading = focusKeyword 
+    ? `${focusKeyword} | ${brand.name}`
+    : section.heading || `${brand.name} - ${brand.city}, ${brand.state}`;
   
   return `
 <section class="hero-section">

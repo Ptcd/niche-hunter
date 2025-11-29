@@ -166,6 +166,24 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
   if (page.skeletons.length > 0) {
     // Use existing skeletons
     for (const skeleton of page.skeletons) {
+      // Override ALL section headings to replace niche slug with focus keyword
+      let heading = skeleton.heading;
+      
+      // Extract service from focus keyword (e.g., "ac repair" from "ac repair in Wesley Chapel")
+      const focusKeywordService = page.focusKeyword?.split(' in ')[0]?.trim() || page.focusKeyword;
+      
+      // Replace niche slug with focus keyword service in heading
+      if (heading) {
+        // Replace niche variations (case-insensitive)
+        const nicheRegex = new RegExp(context.niche, 'gi');
+        heading = heading.replace(nicheRegex, focusKeywordService);
+      }
+      
+      // For hero sections, always use the full focus keyword + brand format
+      if (skeleton.sectionId.includes('hero') || skeleton.sectionId === 'hero_intro') {
+        heading = `${page.focusKeyword} | ${context.brand.name}`;
+      }
+      
       const sectionContent = await generateSectionContent(
         skeleton, 
         context, 
@@ -176,7 +194,7 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
       sections.push({
         id: skeleton.sectionId,
         type: mapSectionType(skeleton.sectionId),
-        heading: skeleton.heading,
+        heading: heading, // Use overridden heading
         content: sectionContent,
         metadata: {
           targetWordCount: skeleton.targetWordCount,
@@ -537,19 +555,19 @@ async function generateDefaultSections(
           id: 'hero',
           type: 'hero',
           heading: `${page.focusKeyword} | ${context.brand.name}`,
-          content: `Professional ${context.niche} services in ${context.city}, ${context.state}. Trusted by homeowners for quality work and exceptional service.`,
+          content: `${page.focusKeyword} services in ${context.city}, ${context.state}. Trusted by homeowners for quality work and exceptional service.`,
         },
         {
           id: 'intro',
           type: 'intro',
-          heading: `Expert ${context.niche} Services in ${context.city}`,
-          content: `We provide professional ${context.niche} services throughout ${context.city}, ${context.state}. Our experienced team delivers quality results you can trust.`,
+          heading: `Professional ${page.focusKeyword} in ${context.city}`,
+          content: `We provide professional ${page.focusKeyword} services throughout ${context.city}, ${context.state}. Our experienced team delivers quality results you can trust.`,
         },
         {
           id: 'services',
           type: 'services-grid',
           heading: 'Our Services',
-          content: `Expert ${context.niche} services\nProfessional installation\nEmergency repairs\nMaintenance plans\nQuality guarantees`,
+          content: `Expert ${page.focusKeyword} services\nProfessional installation\nEmergency repairs\nMaintenance plans\nQuality guarantees`,
         },
         {
           id: 'neighborhoods',
@@ -573,7 +591,7 @@ async function generateDefaultSections(
           id: 'case-study',
           type: 'case-study',
           heading: `Recent ${context.city} Project`,
-          content: `We recently completed a major ${context.niche} project in ${context.city}, ${context.state}.`,
+          content: `We recently completed a major ${page.focusKeyword} project in ${context.city}, ${context.state}.`,
         },
         {
           id: 'guarantees',
@@ -585,7 +603,7 @@ async function generateDefaultSections(
           id: 'faq',
           type: 'faq-accordion',
           heading: 'Frequently Asked Questions',
-          content: `Q: What areas do you serve?\nA: We proudly serve ${context.city}, ${context.state} and surrounding areas.\n\nQ: Are you licensed and insured?\nA: Yes, we are fully licensed and insured for your protection.\n\nQ: Do you offer emergency services?\nA: Yes, we provide 24/7 emergency ${context.niche} services.\n\nQ: Do you offer free estimates?\nA: Yes, we provide free, no-obligation estimates for all projects.`,
+          content: `Q: What areas do you serve?\nA: We proudly serve ${context.city}, ${context.state} and surrounding areas.\n\nQ: Are you licensed and insured?\nA: Yes, we are fully licensed and insured for your protection.\n\nQ: Do you offer emergency services?\nA: Yes, we provide 24/7 emergency ${page.focusKeyword} services.\n\nQ: Do you offer free estimates?\nA: Yes, we provide free, no-obligation estimates for all projects.`,
         },
         {
           id: 'hours',

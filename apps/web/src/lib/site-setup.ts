@@ -253,6 +253,7 @@ export async function generateContentSkeletons(siteId: string): Promise<void> {
       city: site.city,
       state: site.state,
       focusKeyword: page.focusKeyword,
+      brandName: site.siteName || `${site.city} Service`,
       supportingKeywords: page.supportingKeywords,
       keywordRoles: keywordRolesMap,
     };
@@ -302,6 +303,14 @@ export async function buildSkeletonsForPage(pageId: string): Promise<void> {
       site: {
         include: {
           niche: true,
+        },
+        select: {
+          id: true,
+          siteName: true,
+          city: true,
+          state: true,
+          niche: true,
+          batchId: true,
         },
       },
     },
@@ -377,6 +386,7 @@ export async function buildSkeletonsForPage(pageId: string): Promise<void> {
     city: site.city,
     state: site.state,
     focusKeyword: page.focusKeyword || '',
+    brandName: site.siteName || `${site.city} Service`,
     supportingKeywords: page.supportingKeywords || [],
     keywordRoles: keywordRolesMap,
   };
