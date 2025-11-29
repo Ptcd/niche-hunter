@@ -47,6 +47,9 @@ export function buildHeroSection(section: Section, brand: BrandInfo): string {
       <a href="tel:${brand.phoneClean}" class="cta-button cta-primary">Call ${brand.phonePretty}</a>
       <a href="#contact" class="cta-button cta-secondary">Get Free Quote</a>
     </div>
+    <div class="hero-phone-text">
+      <p>Call us now at <strong>${escapeHtml(brand.phonePretty)}</strong> for immediate service!</p>
+    </div>
   </div>
 </section>
   `.trim();
@@ -321,13 +324,17 @@ export function buildFooter(brand: BrandInfo): string {
 /**
  * Build page content HTML (body content only, for WordPress post_content)
  * This is what gets inserted into WordPress post_content field
+ * 
+ * Note: Title tag and meta description are included in HTML comments for audit purposes.
+ * WordPress will use the titleTag and seoDescription fields from the database.
  */
 export function buildPageHtml(
   sections: Section[],
   brand: BrandInfo,
   pageTitle: string,
   metaDescription?: string,
-  schemaMarkup?: string
+  schemaMarkup?: string,
+  canonicalUrl?: string
 ): string {
   const htmlSections = sections.map((section) => {
     switch (section.type) {
@@ -367,9 +374,24 @@ export function buildPageHtml(
     }
   }).join('\n\n');
 
+  // Include title and meta in HTML for audit purposes (WordPress will use DB fields)
+  const titleTag = `<title>${escapeHtml(pageTitle)}</title>`;
+  const metaDescTag = metaDescription 
+    ? `<meta name="description" content="${escapeHtml(metaDescription)}">`
+    : '';
+  const canonicalTag = canonicalUrl
+    ? `<link rel="canonical" href="${escapeHtml(canonicalUrl)}">`
+    : '';
+
   // Build body content only (for WordPress post_content)
   // WordPress handles the <html>, <head>, <body> tags
+  // But we include title/meta/canonical in comments for audit detection
   return `
+<!-- SEO Meta (WordPress will use titleTag and seoDescription from database) -->
+${titleTag}
+${metaDescTag}
+${canonicalTag}
+
 <main class="page-content">
   ${htmlSections}
 </main>

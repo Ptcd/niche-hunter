@@ -254,13 +254,18 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
   };
   const schemaMarkup = generateSchemaMarkup(schemaOptions);
 
+  // Build canonical URL
+  const baseUrl = site.domain ? `https://${site.domain}` : `https://example.com`;
+  const pageUrl = `${baseUrl}/${page.slug || ''}`;
+
   // Build HTML using semantic builder
   const html = buildPageHtml(
     sections,
     brand,
     seoMeta.title,
     seoMeta.description,
-    schemaMarkup
+    schemaMarkup,
+    pageUrl
   );
 
   // Calculate word count
@@ -450,13 +455,16 @@ SEO AUDIT REQUIREMENTS (CRITICAL):
 - Local signals REQUIRED:
   * Mention "${context.city}" at least 3-5 times in this section
   * Mention "${context.state}" at least 1-2 times in this section
-  * Include neighborhood names or nearby areas when relevant
+  * Include specific neighborhood names, zip codes, or nearby areas in ${context.city}
+  * Reference local landmarks, business districts, or well-known areas in ${context.city}
+  * If this is a case-study section: Include a specific project location (neighborhood or street area) in ${context.city}
 - If this is the intro/hero section: First 150 words MUST mention both "${page.focusKeyword.split(' ')[0]}" and "${context.city}" together
 - Include service/location variations naturally (e.g., "${context.city}", "${context.state}", city abbreviations)
+- UNIQUENESS: Make this content specific to ${context.city} - avoid generic template language. Include city-specific details that make this page unique from other location pages.
 
 Content Requirements:
 - Use the primary keyword "${page.focusKeyword}" naturally 2-4 times (depending on section length)
-- Include local references to ${context.city}, ${context.state}
+- Include local references to ${context.city}, ${context.state} with specific details
 - Write ${skeleton.targetWordCount} words (strictly within 10% tolerance - this is critical)
 - Make it engaging and conversion-focused
 - Use proper semantic HTML: <p> for paragraphs, <ul><li> for lists, <h2>/<h3> for subheadings
@@ -606,6 +614,12 @@ async function generateDefaultSections(
           type: 'trust-badges',
           heading: 'Licensed & Insured',
           content: `Fully licensed and insured\nBBB Accredited\nYears of experience`,
+        },
+        {
+          id: 'testimonials',
+          type: 'testimonials',
+          heading: 'What Our Customers Say',
+          content: `Customer testimonials and reviews will be generated here.`,
         },
         {
           id: 'guarantees',
