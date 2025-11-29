@@ -49,8 +49,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: "Page does not belong to this site" });
     }
 
-    // Get HTML (prefer published, fallback to draft)
-    const html = page.htmlPublished || page.htmlDraft || '';
+    // Get HTML from draft
+    const html = page.htmlDraft || '';
     
     if (!html) {
       return res.status(400).json({ error: "Page has no HTML content to audit" });
