@@ -64,12 +64,14 @@ export function buildHeroSection(section: Section, brand: BrandInfo, focusKeywor
  */
 export function buildIntroSection(section: Section): string {
   const heading = section.heading ? `<h2>${escapeHtml(section.heading)}</h2>` : '';
+  // CRITICAL: Strip any H1 tags from GPT-generated content to prevent duplicate H1
+  const safeContent = stripH1FromContent(section.content);
   
   return `
 <section class="content-section">
   ${heading}
   <div class="content-body">
-    ${section.content}
+    ${safeContent}
   </div>
 </section>
   `.trim();
@@ -80,12 +82,13 @@ export function buildIntroSection(section: Section): string {
  */
 export function buildServicesGridSection(section: Section): string {
   const heading = section.heading ? `<h2>${escapeHtml(section.heading)}</h2>` : '';
+  const safeContent = stripH1FromContent(section.content);
   
   return `
 <section class="services-section">
   ${heading}
   <div class="services-grid">
-    ${section.content}
+    ${safeContent}
   </div>
 </section>
   `.trim();
@@ -96,12 +99,13 @@ export function buildServicesGridSection(section: Section): string {
  */
 export function buildWhyChooseUsSection(section: Section): string {
   const heading = section.heading || 'Why Choose Us';
+  const safeContent = stripH1FromContent(section.content);
   
   return `
 <section class="why-choose-section">
   <h2>${escapeHtml(heading)}</h2>
   <div class="benefits-list">
-    ${section.content}
+    ${safeContent}
   </div>
 </section>
   `.trim();
@@ -112,12 +116,13 @@ export function buildWhyChooseUsSection(section: Section): string {
  */
 export function buildProcessStepsSection(section: Section): string {
   const heading = section.heading || 'How It Works';
+  const safeContent = stripH1FromContent(section.content);
   
   return `
 <section class="process-section">
   <h2>${escapeHtml(heading)}</h2>
   <div class="process-steps">
-    ${section.content}
+    ${safeContent}
   </div>
 </section>
   `.trim();
@@ -130,7 +135,8 @@ export function buildProcessStepsSection(section: Section): string {
 export function buildFAQSection(section: Section): string {
   const heading = section.heading || 'Frequently Asked Questions';
   
-  let faqContent = section.content;
+  // Strip any H1 tags first
+  let faqContent = stripH1FromContent(section.content);
   
   // If content is in Q:/A: format, convert to <details> elements
   if (faqContent.includes('Q:') && faqContent.includes('A:')) {
@@ -172,10 +178,11 @@ export function buildFAQSection(section: Section): string {
  * Build CTA block section
  */
 export function buildCTASection(section: Section, brand: BrandInfo): string {
+  const safeContent = stripH1FromContent(section.content);
   return `
 <section class="cta-section">
   <div class="cta-content">
-    ${section.content}
+    ${safeContent}
     <div class="cta-buttons">
       <a href="tel:${brand.phoneClean}" class="cta-button cta-primary">Call ${brand.phonePretty}</a>
       <a href="#contact" class="cta-button cta-secondary">Get Free Quote</a>
@@ -190,12 +197,13 @@ export function buildCTASection(section: Section, brand: BrandInfo): string {
  */
 export function buildLocalContentSection(section: Section): string {
   const heading = section.heading ? `<h2>${escapeHtml(section.heading)}</h2>` : '';
+  const safeContent = stripH1FromContent(section.content);
   
   return `
 <section class="local-content-section">
   ${heading}
   <div class="local-content-body">
-    ${section.content}
+    ${safeContent}
   </div>
 </section>
   `.trim();
@@ -203,39 +211,71 @@ export function buildLocalContentSection(section: Section): string {
 
 /**
  * Build testimonials section with star ratings
+ * Supports both ★★★★★ format and plain text testimonials
  */
 export function buildTestimonialsSection(section: Section, brand?: BrandInfo): string {
   const heading = section.heading || 'What Our Customers Say';
+  let safeContent = stripH1FromContent(section.content);
   
-  // If content contains testimonial structure, use it; otherwise format it
-  let testimonialsHtml = section.content;
-  
-  // Check if content already has HTML structure
-  if (!testimonialsHtml.includes('<div') && !testimonialsHtml.includes('<blockquote')) {
-    // Format plain text testimonials with star ratings
-    const testimonialLines = testimonialsHtml.split('\n').filter(l => l.trim());
-    const formattedTestimonials = testimonialLines.map((line, idx) => {
-      // Try to extract customer name and location from line
-      const nameMatch = line.match(/-?\s*([A-Z][a-z]+\s+[A-Z]\.?)(?:\s*,\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?))?/);
-      const customerName = nameMatch ? nameMatch[1] : `Customer ${idx + 1}`;
-      const location = nameMatch && nameMatch[2] ? nameMatch[2] : (brand?.city || '');
-      
-      return `
-<div class="testimonial">
-  <div class="rating">★★★★★ 5/5</div>
-  <blockquote>${escapeHtml(line.replace(/-?\s*[A-Z][a-z]+\s+[A-Z]\.?.*$/, '').trim())}</blockquote>
-  <cite>- ${escapeHtml(customerName)}${location ? `, ${escapeHtml(location)}` : ''}</cite>
-</div>`;
-    }).join('\n');
-    
-    testimonialsHtml = formattedTestimonials;
+  // If content already has HTML structure, use it
+  if (safeContent.includes('<div') || safeContent.includes('<blockquote')) {
+    return `
+<section class="testimonials-section">
+  <h2>${escapeHtml(heading)}</h2>
+  <div class="testimonials-grid">
+    ${safeContent}
+  </div>
+</section>
+    `.trim();
   }
+  
+  // Parse testimonials - split by double newlines or stars
+  const testimonialBlocks = safeContent.split(/\n\n+/).filter(t => t.trim());
+  const formattedTestimonials = testimonialBlocks.map((block, idx) => {
+    // Check for star rating pattern: ★★★★★ "review text" - Name, Location
+    const starMatch = block.match(/^★{1,5}\s*["'](.+?)["']\s*-\s*(.+?)(?:,\s*(.+))?$/s);
+    
+    let reviewText = '';
+    let customerName = `Happy Customer ${idx + 1}`;
+    let location = brand?.city || '';
+    let stars = '★★★★★';
+    
+    if (starMatch) {
+      reviewText = starMatch[1].trim();
+      customerName = starMatch[2].trim();
+      location = starMatch[3]?.trim() || location;
+    } else {
+      // Fallback: try to extract name from end of line
+      const nameMatch = block.match(/-\s*([A-Z][a-z]+(?:\s+[A-Z]\.?)?)\s*(?:,\s*([A-Za-z\s]+))?$/);
+      if (nameMatch) {
+        customerName = nameMatch[1];
+        location = nameMatch[2] || location;
+        reviewText = block.replace(/-\s*[A-Z][a-z]+.*$/, '').replace(/^★+\s*/, '').trim();
+      } else {
+        reviewText = block.replace(/^★+\s*/, '').trim();
+      }
+    }
+    
+    // Remove quotes if present
+    reviewText = reviewText.replace(/^["']|["']$/g, '').trim();
+    
+    return `
+<div class="testimonial" itemscope itemtype="https://schema.org/Review">
+  <div class="rating" itemprop="reviewRating" itemscope itemtype="https://schema.org/Rating">
+    <span class="stars">${stars}</span>
+    <meta itemprop="ratingValue" content="5">
+    <meta itemprop="bestRating" content="5">
+  </div>
+  <blockquote itemprop="reviewBody">"${escapeHtml(reviewText)}"</blockquote>
+  <cite itemprop="author">- ${escapeHtml(customerName)}${location ? `, ${escapeHtml(location)}` : ''}</cite>
+</div>`;
+  }).join('\n');
   
   return `
 <section class="testimonials-section">
   <h2>${escapeHtml(heading)}</h2>
   <div class="testimonials-grid">
-    ${testimonialsHtml}
+    ${formattedTestimonials}
   </div>
 </section>
   `.trim();
@@ -246,12 +286,13 @@ export function buildTestimonialsSection(section: Section, brand?: BrandInfo): s
  */
 export function buildCommonProblemsSection(section: Section): string {
   const heading = section.heading || 'Common Problems We Solve';
+  const safeContent = stripH1FromContent(section.content);
   
   return `
 <section class="problems-section">
   <h2>${escapeHtml(heading)}</h2>
   <div class="problems-list">
-    ${section.content}
+    ${safeContent}
   </div>
 </section>
   `.trim();
@@ -262,12 +303,13 @@ export function buildCommonProblemsSection(section: Section): string {
  */
 export function buildNeighborhoodsSection(section: Section): string {
   const heading = section.heading || 'Areas We Serve';
+  const safeContent = stripH1FromContent(section.content);
   
   return `
 <section class="neighborhoods-section">
   <h2>${escapeHtml(heading)}</h2>
   <div class="neighborhoods-list">
-    ${section.content}
+    ${safeContent}
   </div>
 </section>
   `.trim();
@@ -305,12 +347,13 @@ export function buildTrustBadgesSection(section: Section): string {
  */
 export function buildHoursSection(section: Section, brand: BrandInfo): string {
   const heading = section.heading || 'Business Hours';
+  const safeContent = stripH1FromContent(section.content);
   
   return `
 <section class="hours-section">
   <h2>${escapeHtml(heading)}</h2>
   <div class="hours-content">
-    ${section.content}
+    ${safeContent}
   </div>
   <div class="hours-contact">
     <p>Call us at <a href="tel:${brand.phoneClean}">${escapeHtml(brand.phonePretty)}</a> for immediate assistance.</p>
@@ -324,12 +367,13 @@ export function buildHoursSection(section: Section, brand: BrandInfo): string {
  */
 export function buildGuaranteesSection(section: Section): string {
   const heading = section.heading || 'Our Guarantee';
+  const safeContent = stripH1FromContent(section.content);
   
   return `
 <section class="guarantees-section">
   <h2>${escapeHtml(heading)}</h2>
   <div class="guarantees-content">
-    ${section.content}
+    ${safeContent}
   </div>
 </section>
   `.trim();
@@ -340,12 +384,13 @@ export function buildGuaranteesSection(section: Section): string {
  */
 export function buildCaseStudySection(section: Section): string {
   const heading = section.heading || 'Recent Project';
+  const safeContent = stripH1FromContent(section.content);
   
   return `
 <section class="case-study-section">
   <h2>${escapeHtml(heading)}</h2>
   <div class="case-study-content">
-    ${section.content}
+    ${safeContent}
   </div>
 </section>
   `.trim();
@@ -467,6 +512,15 @@ ${canonicalTag}
 ${buildFooter(brand)}
 ${schemaMarkup ? `<script type="application/ld+json">${schemaMarkup}</script>` : ''}
   `.trim();
+}
+
+/**
+ * Strip H1 tags from content (convert to H2) - prevents duplicate H1 issue
+ * CRITICAL: Only the hero section should have an H1
+ */
+function stripH1FromContent(content: string): string {
+  // Convert any H1 tags to H2 to prevent duplicate H1 issues
+  return content.replace(/<h1([^>]*)>([\s\S]*?)<\/h1>/gi, '<h2$1>$2</h2>');
 }
 
 /**
