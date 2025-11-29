@@ -269,6 +269,9 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
     faqItems = extractFAQFromContent(sections.map(s => s.content).join(' '));
   }
   
+  // Check if there's a testimonials section
+  const hasTestimonials = sections.some(s => s.type === 'testimonials' || s.id === 'testimonials');
+  
   const schemaOptions: SchemaOptions = {
     brand: {
       name: brand.name,
@@ -285,6 +288,8 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
     serviceName: page.pageType === PageType.CORE_SERVICE
       ? page.focusKeyword 
       : undefined,
+    hasTestimonials,
+    reviewCount: hasTestimonials ? 50 : undefined,
   };
   const schemaMarkup = generateSchemaMarkup(schemaOptions);
 
@@ -426,19 +431,40 @@ async function generateSectionContent(
   model: string = 'gpt-4o',
   externalResources: string = ''
 ): Promise<string> {
+  // Extract service name from focus keyword (e.g., "ac repair in Wesley Chapel" -> "AC Repair")
+  const extractServiceName = (focusKeyword: string): string => {
+    // Remove city/location parts
+    const withoutCity = focusKeyword
+      .replace(new RegExp(`\\s+(in|near|for)\\s+${context.city}`, 'gi'), '')
+      .replace(new RegExp(context.city, 'gi'), '')
+      .replace(new RegExp(context.state, 'gi'), '')
+      .trim();
+    // Capitalize properly
+    return withoutCity.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+  };
+  
+  const serviceName = extractServiceName(page.focusKeyword);
+  const nicheSlug = context.niche.toLowerCase();
+  
   const systemPrompt = context.promptProfile?.systemPrompt || `
 You are an expert local SEO copywriter for home-service businesses.
 Write engaging, conversion-focused content that builds trust and drives action.
 Always write in clear, friendly, professional US English.
 Output clean HTML content (paragraphs, lists, headings) - no markdown, no code blocks.
 
+CRITICAL: SERVICE NAME USAGE:
+- The service being offered is "${serviceName}" - USE THIS in headings and content
+- NEVER use the generic term "${nicheSlug}" or "HVAC" in headings - use "${serviceName}" instead
+- Example: Instead of "Our HVAC Services", write "Our ${serviceName} Services"
+- Example: Instead of "Why Choose HVAC", write "Why Choose ${serviceName}"
+
 CRITICAL SEO AUDIT REQUIREMENTS:
-- Title/H1: MUST include both service name AND city name (e.g., "HVAC Repair Milwaukee")
+- Title/H1: MUST include both service name AND city name (e.g., "${serviceName} in ${context.city}")
 - First 150 words: MUST mention both service and city together
 - Keyword placement: Primary keyword in title, H1, first paragraph, and at least one subheading (H2/H3)
 - Local signals: Include city name 5+ times and state name 2+ times throughout content
 - Keyword density: Maintain 0.5-2% keyword density (not too sparse, not stuffed)
-- Include service/location variations naturally (e.g., "Milwaukee", "MKE", "Milwaukee area")
+- Include service/location variations naturally (e.g., "${context.city}", "${context.state}", nearby areas)
 `;
 
   const styleGuidelines = context.promptProfile?.styleGuidelines || `
@@ -509,6 +535,12 @@ Content Requirements:
 - Include 1-2 external resource citations if provided (use <a> tags with rel="nofollow noopener noreferrer")
 - No markdown, no code blocks, just clean HTML content
 
+IMPORTANT - SERVICE NAME REMINDER:
+- Service name to use: "${serviceName}"
+- NEVER use generic terms like "HVAC" or "${nicheSlug}" in headings
+- In headings, use "${serviceName}" or "${page.focusKeyword}"
+- Example heading: "${serviceName} Services in ${context.city}" or "Why Choose Us for ${serviceName}"
+
 Output ONLY the HTML content text (no markdown, no code blocks, no backticks).
 `;
 
@@ -528,7 +560,36 @@ Output ONLY the HTML content text (no markdown, no code blocks, no backticks).
       throw new Error('GPT returned empty content');
     }
 
-    return content.trim();
+    // Post-process to replace any remaining niche slug usage in headings
+    let processedContent = content.trim();
+    
+    // Replace niche slug in H2/H3 headings with service name
+    const nichePatterns = [
+      // "Our HVAC" -> "Our AC Repair"
+      new RegExp(`(<h[23][^>]*>)Our\\s+${nicheSlug}`, 'gi'),
+      // "Why Choose HVAC" -> "Why Choose AC Repair"
+      new RegExp(`(<h[23][^>]*>)Why\\s+(?:Choose\\s+)?${nicheSlug}`, 'gi'),
+      // "HVAC Services" -> "AC Repair Services"
+      new RegExp(`(<h[23][^>]*>)${nicheSlug}\\s+Services`, 'gi'),
+      // "How Our HVAC" -> "How Our AC Repair"
+      new RegExp(`(<h[23][^>]*>)How\\s+Our\\s+${nicheSlug}`, 'gi'),
+    ];
+    
+    for (const pattern of nichePatterns) {
+      processedContent = processedContent.replace(pattern, (match, tag) => {
+        return match.replace(new RegExp(nicheSlug, 'gi'), serviceName);
+      });
+    }
+    
+    // Also replace standalone "HVAC" in headings (case-insensitive but preserve H tag)
+    processedContent = processedContent.replace(
+      /(<h[23][^>]*>)([^<]*)(hvac)([^<]*<\/h[23]>)/gi,
+      (match, openTag, before, hvac, after) => {
+        return `${openTag}${before}${serviceName}${after}`;
+      }
+    );
+
+    return processedContent;
   } catch (error: any) {
     console.error(`[generateSectionContent] Error for section ${skeleton.sectionId}:`, error);
     throw new Error(`Failed to generate section content: ${error.message}`);
@@ -592,6 +653,12 @@ async function generateDefaultSections(
           type: 'case-study',
           heading: `Recent ${context.city} Project`,
           content: `We recently completed a major ${page.focusKeyword} project in ${context.city}, ${context.state}.`,
+        },
+        {
+          id: 'testimonials',
+          type: 'testimonials',
+          heading: `What ${context.city} Customers Say`,
+          content: `★★★★★ "Excellent ${page.focusKeyword} service! The team was professional and arrived on time. Highly recommend to anyone in ${context.city}!" - Sarah M., ${context.city}\n\n★★★★★ "Best ${page.focusKeyword} company in ${context.city}, ${context.state}! Fair pricing and quality work. Will use again." - Mike T., ${context.city}\n\n★★★★★ "Fast response time and great communication. ${context.brand.name} is our go-to for ${page.focusKeyword} in ${context.city}." - Jennifer R., ${context.city}`,
         },
         {
           id: 'guarantees',

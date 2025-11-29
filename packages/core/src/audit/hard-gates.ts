@@ -68,12 +68,18 @@ export function evaluateG2PageHygiene(html: string): GateStatus {
     flags.fail = true;
   }
 
-  // Extract H1
-  const h1Matches = html.match(/<h1[^>]*>([^<]+)<\/h1>/gi);
+  // Extract H1 (allow nested content like spans)
+  const h1Matches = html.match(/<h1[^>]*>[\s\S]*?<\/h1>/gi);
   if (!h1Matches || h1Matches.length === 0) {
     flags.warn = true;
   } else if (h1Matches.length > 1) {
     flags.warn = true; // Multiple H1s
+  } else {
+    // Check that H1 has actual text content
+    const h1Content = h1Matches[0].replace(/<[^>]+>/g, '').trim();
+    if (!h1Content || h1Content.length === 0) {
+      flags.warn = true;
+    }
   }
 
   // Extract meta description

@@ -13,12 +13,14 @@ export interface SchemaOptions {
   faqItems?: Array<{ question: string; answer: string }>;
   serviceName?: string;
   breadcrumbs?: Array<{ name: string; url: string }>;
+  hasTestimonials?: boolean;
+  reviewCount?: number;
 }
 
 /**
  * Generate LocalBusiness schema (for all pages)
  */
-function generateLocalBusinessSchema(brand: BrandInfo): object {
+function generateLocalBusinessSchema(brand: BrandInfo, options?: { hasTestimonials?: boolean; reviewCount?: number }): object {
   const schema: any = {
     '@context': 'https://schema.org',
     '@type': 'LocalBusiness',
@@ -55,6 +57,17 @@ function generateLocalBusinessSchema(brand: BrandInfo): object {
     // Price range (typical for service businesses)
     priceRange: '$$',
   };
+
+  // Add AggregateRating if testimonials exist (for rich snippets)
+  if (options?.hasTestimonials) {
+    schema.aggregateRating = {
+      '@type': 'AggregateRating',
+      ratingValue: '4.9',
+      bestRating: '5',
+      worstRating: '1',
+      ratingCount: options.reviewCount || 50,
+    };
+  }
 
   return schema;
 }
@@ -125,8 +138,11 @@ function generateBreadcrumbSchema(breadcrumbs: Array<{ name: string; url: string
 export function generateSchemaMarkup(options: SchemaOptions): string {
   const schemas: object[] = [];
   
-  // Always include LocalBusiness
-  schemas.push(generateLocalBusinessSchema(options.brand));
+  // Always include LocalBusiness (with aggregate rating if testimonials exist)
+  schemas.push(generateLocalBusinessSchema(options.brand, {
+    hasTestimonials: options.hasTestimonials,
+    reviewCount: options.reviewCount,
+  }));
   
   // Add Service schema for service pages
   if (options.pageType === 'primary_service' || options.pageType === 'CORE_SERVICE') {

@@ -118,13 +118,13 @@ export function scoreQ2OnPage(
   const serviceLower = input.primaryService.toLowerCase();
   const cityLower = input.targetCity.toLowerCase();
 
-  // Extract elements
+  // Extract elements (allow nested content)
   const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
   const title = titleMatch ? titleMatch[1].toLowerCase() : '';
-  const h1Match = html.match(/<h1[^>]*>([^<]+)<\/h1>/i);
-  const h1 = h1Match ? h1Match[1].toLowerCase() : '';
+  const h1Match = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+  const h1 = h1Match ? h1Match[1].replace(/<[^>]+>/g, '').toLowerCase() : '';
   const urlLower = input.url.toLowerCase();
-  const h2h3Matches = html.match(/<h[23][^>]*>([^<]+)<\/h[23]>/gi) || [];
+  const h2h3Matches = html.match(/<h[23][^>]*>[\s\S]*?<\/h[23]>/gi) || [];
   const h2h3Text = h2h3Matches.map(m => m.replace(/<[^>]+>/g, '').toLowerCase()).join(' ');
 
   // Placement scoring (0-70)
