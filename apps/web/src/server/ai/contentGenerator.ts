@@ -245,6 +245,13 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
   // Generate sections based on ContentSkeleton
   const sections: Section[] = [];
   
+  // Track keyword usage and word count across all sections
+  let totalWordCount = 0;
+  let keywordUsageCount = 0;
+  const limits = WORD_LIMITS[page.pageType];
+  const maxWords = limits.max;
+  const isHomePage = page.pageType === PageType.HOME;
+  
   if (page.skeletons.length > 0) {
     // Use existing skeletons
     for (const skeleton of page.skeletons) {
@@ -266,20 +273,38 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
         heading = `${page.focusKeyword} | ${context.brand.name}`;
       }
       
+      // Adjust word count for HOME pages to fit within 1500-2200 limit
+      let adjustedWordCount = skeleton.targetWordCount;
+      if (isHomePage && totalWordCount + adjustedWordCount > maxWords * 0.9) {
+        // Reduce this section's word count to stay within limit
+        adjustedWordCount = Math.max(100, maxWords - totalWordCount - 200); // Leave 200 words buffer
+      }
+      
       const sectionContent = await generateSectionContent(
-        skeleton, 
+        { ...skeleton, targetWordCount: adjustedWordCount },
         context, 
         page, 
         model,
-        externalResources
+        externalResources,
+        keywordUsageCount, // Pass current keyword count
+        maxWords - totalWordCount // Pass remaining word budget
       );
+      
+      // Count keyword usage in this section
+      const sectionKeywordCount = (sectionContent.match(new RegExp(page.focusKeyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')) || []).length;
+      keywordUsageCount += sectionKeywordCount;
+      
+      // Count words in this section
+      const sectionWordCount = sectionContent.split(/\s+/).length;
+      totalWordCount += sectionWordCount;
+      
       sections.push({
         id: skeleton.sectionId,
         type: mapSectionType(skeleton.sectionId),
         heading: heading, // Use overridden heading
         content: sectionContent,
         metadata: {
-          targetWordCount: skeleton.targetWordCount,
+          targetWordCount: adjustedWordCount,
           styleVariant: skeleton.styleVariant || undefined,
         },
       });
@@ -318,7 +343,7 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
           sectionId: 'faq',
           heading: `Frequently Asked Questions About ${page.focusKeyword} in ${context.city}`,
           purpose: `Generate 5-7 FAQ questions and answers specific to ${page.focusKeyword} in ${context.city}, ${context.state}. Include city-specific details like neighborhoods, local regulations, or area-specific concerns.`,
-          targetWordCount: 400, // More content for depth (CONTENT_DEPTH_GAP fix)
+          targetWordCount: isHomePage ? 250 : 400, // Reduced for HOME pages to fit 1500-2200 limit
           requiredKeywordRoles: [],
           optionalKeywordRoles: [],
           localHints: [
@@ -331,8 +356,14 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
         context,
         page,
         model,
-        externalResources
+        externalResources,
+        keywordUsageCount,
+        maxWords - totalWordCount
       );
+      
+      const faqKeywordCount = (faqContent.match(new RegExp(page.focusKeyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')) || []).length;
+      keywordUsageCount += faqKeywordCount;
+      totalWordCount += faqContent.split(/\s+/).length;
       
       sections.push({
         id: 'faq',
@@ -351,7 +382,7 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
           sectionId: 'case_study',
           heading: `Recent ${page.focusKeyword} Project in ${context.city}`,
           purpose: `Describe a specific, detailed project completed in ${context.city}. Include neighborhood name, specific challenges, solutions, and results. Make this 100% unique to ${context.city} - include real neighborhood names, local landmarks, or city-specific details.`,
-          targetWordCount: 300, // More content for depth
+          targetWordCount: isHomePage ? 200 : 300, // Reduced for HOME pages
           requiredKeywordRoles: [],
           optionalKeywordRoles: [],
           localHints: [
@@ -364,8 +395,14 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
         context,
         page,
         model,
-        externalResources
+        externalResources,
+        keywordUsageCount,
+        maxWords - totalWordCount
       );
+      
+      const caseKeywordCount = (caseStudyContent.match(new RegExp(page.focusKeyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')) || []).length;
+      keywordUsageCount += caseKeywordCount;
+      totalWordCount += caseStudyContent.split(/\s+/).length;
       
       sections.push({
         id: 'case_study',
@@ -384,7 +421,7 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
           sectionId: 'neighborhoods',
           heading: `Areas We Serve in ${context.city}, ${context.state}`,
           purpose: `List 8-12 specific neighborhoods, districts, or areas within ${context.city} where services are provided. Include brief descriptions of each area. Make this unique to ${context.city} - use real neighborhood names.`,
-          targetWordCount: 250, // More content for depth
+          targetWordCount: isHomePage ? 150 : 250, // Reduced for HOME pages
           requiredKeywordRoles: [],
           optionalKeywordRoles: [],
           localHints: [
@@ -397,8 +434,14 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
         context,
         page,
         model,
-        externalResources
+        externalResources,
+        keywordUsageCount,
+        maxWords - totalWordCount
       );
+      
+      const neighborhoodsKeywordCount = (neighborhoodsContent.match(new RegExp(page.focusKeyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')) || []).length;
+      keywordUsageCount += neighborhoodsKeywordCount;
+      totalWordCount += neighborhoodsContent.split(/\s+/).length;
       
       sections.push({
         id: 'neighborhoods',
@@ -565,13 +608,34 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
   });
 
   // Calculate word count
-  const wordCount = html.split(/\s+/).length;
+  let wordCount = html.split(/\s+/).length;
+  const limits = WORD_LIMITS[page.pageType];
+
+  // Trim HTML if it exceeds max word count
+  if (wordCount > limits.max) {
+    const words = html.split(/\s+/);
+    const trimmedWords = words.slice(0, limits.max);
+    // Try to end at a sentence boundary
+    let trimmedHtml = trimmedWords.join(' ');
+    const lastPeriod = trimmedHtml.lastIndexOf('.');
+    if (lastPeriod > trimmedHtml.length * 0.9) {
+      trimmedHtml = trimmedHtml.substring(0, lastPeriod + 1);
+    }
+    html = trimmedHtml;
+    wordCount = html.split(/\s+/).length;
+    console.warn(
+      `[Content Quality] Trimmed page from ${words.length} to ${wordCount} words (limit: ${limits.max})`
+    );
+  }
 
   // Validate word count limits
-  const limits = WORD_LIMITS[page.pageType];
   if (wordCount < limits.min || wordCount > limits.max) {
     console.warn(
       `[Content Quality] Word count ${wordCount} is outside limits for ${page.pageType} (${limits.min}-${limits.max})`
+    );
+  } else {
+    console.log(
+      `[Content Quality] Word count ${wordCount} is within limits for ${page.pageType} (${limits.min}-${limits.max}) ✓`
     );
   }
 
@@ -777,7 +841,9 @@ async function generateSectionContent(
   context: PageContext,
   page: { focusKeyword: string; pageType: PageType; supportingKeywords?: string[] },
   model: string = 'gpt-4o-mini',
-  externalResources: string = ''
+  externalResources: string = '',
+  keywordUsageCount: number = 0,
+  remainingWordBudget: number = Infinity
 ): Promise<string> {
   // Extract service name from focus keyword (e.g., "ac repair in Wesley Chapel" -> "AC Repair")
   const extractServiceName = (focusKeyword: string): string => {
@@ -843,6 +909,7 @@ Section Details:
 - Heading: ${skeleton.heading}
 - Purpose: ${skeleton.purpose}
 - Target word count: ${skeleton.targetWordCount} words (minimum ${Math.floor(skeleton.targetWordCount * 0.9)}, maximum ${Math.ceil(skeleton.targetWordCount * 1.1)})
+- Remaining word budget for entire page: ${remainingWordBudget} words (do not exceed this)
 ${skeleton.styleVariant ? `- Style variant: ${skeleton.styleVariant}` : ''}
 
 Business Context:
@@ -859,14 +926,18 @@ ${styleGuidelines}
 ${externalResourcesText}
 
 SEO AUDIT REQUIREMENTS (CRITICAL - MUST FOLLOW):
-- Primary keyword "${page.focusKeyword}" MUST appear in:
-  * FIRST SENTENCE of this section (if this is intro/hero section, this is MANDATORY)
-  * First paragraph (if this is intro/hero section, keyword must be in first 50 words)
+- KEYWORD USAGE TRACKING:
+  * Keyword "${page.focusKeyword}" has been used ${keywordUsageCount} times in previous sections
+  * MAXIMUM 4-8 exact matches allowed across the ENTIRE page
+  * You may use the keyword ${Math.max(0, Math.min(2, 8 - keywordUsageCount))} more time(s) in this section
+  * If ${keywordUsageCount} >= 4, DO NOT use the exact keyword "${page.focusKeyword}" in this section - use variations only
+  * Use natural variations instead: "${page.focusKeyword.split(' in ')[0] || page.focusKeyword}", "${serviceName}", "AC repair services", etc.
+- Primary keyword placement:
+  * FIRST SENTENCE of this section (if this is intro/hero section, this is MANDATORY - but only if keyword count < 4)
+  * First paragraph (if this is intro/hero section, keyword must be in first 50 words - but only if keyword count < 4)
   * At least one subheading (H2 or H3) if this section has subheadings
-  * MAXIMUM 4-8 exact matches of "${page.focusKeyword}" across the entire page (NOT per section)
-  * Use 10-15 natural variations (e.g., "${page.focusKeyword.split(' in ')[0] || page.focusKeyword}", "AC repair services", etc.)
-  * Maximum keyword density: 1.0% (keyword count / total words * 100)
-  * DO NOT keyword stuff - natural distribution only
+- Maximum keyword density: 1.0% (keyword count / total words * 100) - NO EXCEPTIONS
+- DO NOT keyword stuff - if you've already used the keyword 4+ times, use variations only
 - Local signals REQUIRED:
   * Mention "${context.city}" at least 3-5 times in this section
   * Mention "${context.state}" at least 1-2 times in this section
@@ -920,7 +991,16 @@ Output ONLY the HTML content text (no markdown, no code blocks, no backticks). D
       ],
     });
 
-    const content = completion.choices[0]?.message?.content!;
+    let content = completion.choices[0]?.message?.content!;
+
+    // Trim content if it exceeds word budget
+    const contentWords = content.split(/\s+/);
+    if (contentWords.length > skeleton.targetWordCount * 1.2) {
+      // Content is 20%+ over target - trim it
+      const maxWords = Math.ceil(skeleton.targetWordCount * 1.1);
+      content = contentWords.slice(0, maxWords).join(' ') + '...';
+      console.warn(`[Content Quality] Trimmed section ${skeleton.sectionId} from ${contentWords.length} to ${maxWords} words`);
+    }
 
     // Post-process to replace any remaining niche slug usage in headings
     let processedContent = content.trim();
