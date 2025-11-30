@@ -68,14 +68,16 @@ CRITICAL RULES for all prompts:
 - Works well at small sizes
 - Tailored to ${site.niche.name} industry
 
-Return ONLY a valid JSON array with this exact structure:
-[
-  {
-    "name": "Concept Name",
-    "description": "Brief description",
-    "prompt": "Full DALL-E prompt here"
-  }
-]`;
+Return ONLY a valid JSON object with this exact structure:
+{
+  "concepts": [
+    {
+      "name": "Concept Name",
+      "description": "Brief description",
+      "prompt": "Full DALL-E prompt here"
+    }
+  ]
+}`;
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
