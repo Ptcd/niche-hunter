@@ -21,12 +21,8 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// Model fallback configuration
-const MODEL_FALLBACKS: Record<string, string[]> = {
-  'gpt-5': ['gpt-5', 'gpt-4o'],
-  'gpt-4o-mini': ['gpt-4o-mini', 'gpt-4o-mini'],
-  'gpt-4o-mini': ['gpt-4o-mini', 'gpt-4o-mini'],
-};
+// Model configuration (GPT-4o models for content generation)
+const SUPPORTED_MODELS = ['gpt-4o', 'gpt-4o-mini'];
 
 // Direct API call with detailed logging (no fallback per user request)
 async function callWithFallback(
