@@ -420,7 +420,7 @@ function limitWithinSectionRepetition(
         replacements++;
         // Replace with generic alternative
         if (/seven oaks|meadow|lexington|northwood|collier/i.test(match)) {
-          return 'the area';
+          return match; // Keep the neighborhood - enrichment provides variety
         }
         if (/technicians?/i.test(match)) {
           return 'our team';
