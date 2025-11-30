@@ -76,7 +76,7 @@ Return ONLY a valid JSON object with this exact structure:
 }`;
 
     const completion = await chatWithFallback({
-      model: 'gpt-5-nano',
+      model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: `Generate logo concepts for ${site.niche.name} in ${site.city}, ${site.state}` },

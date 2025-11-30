@@ -1,7 +1,7 @@
 /**
  * Content Generator Module
  * 
- * Generates page content section-by-section using gpt-5-mini and existing data.
+ * Generates page content section-by-section using gpt-4o-mini and existing data.
  * Uses ContentSkeleton templates and PromptProfile for tone/style.
  */
 
@@ -24,8 +24,8 @@ const openai = new OpenAI({
 // Model fallback configuration
 const MODEL_FALLBACKS: Record<string, string[]> = {
   'gpt-5': ['gpt-5', 'gpt-4o'],
-  'gpt-5-mini': ['gpt-5-mini', 'gpt-4o-mini'],
-  'gpt-5-nano': ['gpt-5-nano', 'gpt-4o-mini'],
+  'gpt-4o-mini': ['gpt-4o-mini', 'gpt-4o-mini'],
+  'gpt-4o-mini': ['gpt-4o-mini', 'gpt-4o-mini'],
 };
 
 // Direct API call with detailed logging (no fallback per user request)
@@ -36,7 +36,7 @@ async function callWithFallback(
   
   console.log(`[GPT] Calling model: ${model}`);
   console.log(`[GPT] Messages count: ${createOptions.messages.length}`);
-  console.log(`[GPT] Max tokens: ${createOptions.max_completion_tokens}`);
+  console.log(`[GPT] Max tokens: ${createOptions.max_tokens}`);
   
   try {
     const result = await openai.chat.completions.create({
@@ -103,7 +103,7 @@ export interface GeneratedPage {
 /**
  * Generate content for a single page
  */
-export async function generatePageContent(pageId: string, model: string = 'gpt-5-mini'): Promise<GeneratedPage> {
+export async function generatePageContent(pageId: string, model: string = 'gpt-4o-mini'): Promise<GeneratedPage> {
   const page = await prisma.sitePage.findUnique({
     where: { id: pageId },
     include: {
@@ -554,7 +554,7 @@ async function generateSEOMeta(
   brandName: string,
   city: string,
   state: string,
-  model: string = 'gpt-5-mini'
+  model: string = 'gpt-4o-mini'
 ): Promise<{ title: string; description: string }> {
   const systemPrompt = `
 You are an expert SEO copywriter specializing in local business optimization.
@@ -591,7 +591,7 @@ Output format (JSON only, no markdown):
   try {
     const completion = await callWithFallback({
       model,
-      max_completion_tokens: 1000,
+      max_tokens: 300,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt.trim() },
@@ -643,7 +643,7 @@ async function generateImageSuggestions(
   niche: string,
   city: string,
   state: string,
-  model: string = 'gpt-5-mini'
+  model: string = 'gpt-4o-mini'
 ): Promise<string[]> {
   const systemPrompt = `You are an expert at suggesting stock photo search terms.
 Given a page topic and location, suggest 4-6 simple, visual search terms that will return great stock photos from Unsplash.
@@ -678,7 +678,7 @@ Return simple, visual search terms that will work well on Unsplash.`;
   try {
     const completion = await callWithFallback({
       model,
-      max_completion_tokens: 1000,
+      max_tokens: 300,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt.trim() },
@@ -725,7 +725,7 @@ async function generateSectionContent(
   },
   context: PageContext,
   page: { focusKeyword: string; pageType: PageType; supportingKeywords?: string[] },
-  model: string = 'gpt-5-mini',
+  model: string = 'gpt-4o-mini',
   externalResources: string = ''
 ): Promise<string> {
   // Extract service name from focus keyword (e.g., "ac repair in Wesley Chapel" -> "AC Repair")
@@ -856,7 +856,7 @@ Output ONLY the HTML content text (no markdown, no code blocks, no backticks). D
   try {
     const completion = await callWithFallback({
       model,
-      max_completion_tokens: Math.ceil(skeleton.targetWordCount * 6), // GPT-5 needs extra tokens for reasoning
+      max_tokens: Math.ceil(skeleton.targetWordCount * 2), // ~2 tokens per word for HTML output
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt.trim() },
@@ -915,7 +915,7 @@ async function generateDefaultSections(
   pageType: PageType,
   context: PageContext,
   page: { focusKeyword: string; pageType: PageType },
-  model: string = 'gpt-5-mini',
+  model: string = 'gpt-4o-mini',
   externalResources: string = ''
 ): Promise<Section[]> {
   const sections: Section[] = [];

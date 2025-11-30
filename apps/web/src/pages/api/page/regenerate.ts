@@ -95,7 +95,7 @@ Output ONLY the HTML content, no JSON, no markdown, no backticks.
 
     // Call OpenAI with fallback
     const completion = await chatWithFallback({
-      model: "gpt-5-nano",
+      model: "gpt-4o-mini",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt.trim() },

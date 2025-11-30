@@ -82,7 +82,7 @@ Output ONLY a JSON array of page objects with fields:
 `;
 
   const completion = await chatWithFallback({
-    model: "gpt-5-nano",
+    model: "gpt-4o-mini",
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt.trim() },
