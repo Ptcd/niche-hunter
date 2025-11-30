@@ -38,8 +38,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: "Page does not belong to this site" });
     }
 
-    // Get model from request body, default to 'gpt-4o-mini'
-    const { model = 'gpt-4o-mini' } = req.body as { model?: string };
+    // Get model from request body, default to 'gpt-5-mini'
+    const { model = 'gpt-5-mini' } = req.body as { model?: string };
 
     // Generate new content (this also updates titleTag and seoDescription)
     const generated = await generatePageContent(pageId, model);

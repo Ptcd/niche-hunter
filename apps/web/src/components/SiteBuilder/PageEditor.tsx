@@ -42,7 +42,7 @@ export default function PageEditor({ siteId, pageId, city, state, onPageUpdate }
   const [regenerating, setRegenerating] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [useCustomHtml, setUseCustomHtml] = useState(false);
-  const [selectedModel, setSelectedModel] = useState('gpt-4o-mini');
+  const [selectedModel, setSelectedModel] = useState('gpt-5-mini');
   
   // Form state
   const [seoTitle, setSeoTitle] = useState('');
@@ -299,9 +299,9 @@ export default function PageEditor({ siteId, pageId, city, state, onPageUpdate }
                 borderRadius: '4px',
               }}
             >
-              <option value="gpt-4o">GPT-4o (Best quality)</option>
-              <option value="gpt-4o-mini">GPT-4o-mini (Recommended)</option>
-              <option value="gpt-4-turbo">GPT-4 Turbo (Alternative)</option>
+              <option value="gpt-5">GPT-5 (Best quality)</option>
+              <option value="gpt-5-mini">GPT-5-mini (Recommended)</option>
+              <option value="gpt-5-nano">GPT-5-nano (Fastest, cheapest)</option>
             </select>
           </div>
 
