@@ -162,6 +162,34 @@ const HEADING_CASE_CORRECTIONS: Record<string, string> = {
   'a/c': 'A/C',
 };
 
+// Natural heading alternatives for different section types
+const NATURAL_HEADING_TEMPLATES: Record<string, string[]> = {
+  why_choose: [
+    'Trusted {service} Services',
+    'Professional {service} You Can Count On', 
+    'Quality {service} for {city} Homes',
+    'Reliable {service} Solutions',
+    'Why Homeowners Trust Us',
+    'The {city} Choice for {service}',
+  ],
+  process: [
+    'Our {service} Process',
+    'How We Handle Your {service}',
+    'What to Expect from Our Team',
+    'Our Approach to {service}',
+  ],
+  services: [
+    'Our {service} Services',
+    '{service} Solutions We Offer',
+    'Complete {service} Services',
+  ],
+  default: [
+    'Expert {service} in {city}',
+    'Professional {service} Services',
+    '{service} You Can Trust',
+  ],
+};
+
 // Niche-specific variation pools
 const NICHE_VARIATIONS: Record<string, {
   serviceTerms: string[];
@@ -292,6 +320,120 @@ function isHeadingNatural(heading: string, keyword: string): boolean {
   if (new RegExp(`^${escapedKw}`, 'i').test(heading.trim())) return false;
   
   return true;
+}
+
+/**
+ * Rewrite an unnatural heading to a natural one
+ */
+function rewriteUnnaturalHeading(
+  heading: string,
+  keyword: string,
+  city: string,
+  sectionType: string = 'default'
+): string {
+  // Extract service name from keyword (e.g., "ac repair in Wesley Chapel" -> "AC Repair")
+  const service = keyword
+    .replace(/\s+(in|near|for)\s+.*/i, '')
+    .split(' ')
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+  
+  // Get templates for this section type
+  const templates = NATURAL_HEADING_TEMPLATES[sectionType] || NATURAL_HEADING_TEMPLATES.default;
+  
+  // Pick a random template
+  const template = templates[Math.floor(Math.random() * templates.length)];
+  
+  // Replace placeholders
+  return template
+    .replace('{service}', service)
+    .replace('{city}', city);
+}
+
+/**
+ * Fix headings that match banned patterns
+ */
+function fixBannedHeadingPatterns(
+  html: string,
+  keyword: string,
+  city: string
+): { html: string; fixed: number } {
+  let fixed = 0;
+  
+  let result = html.replace(/<h2([^>]*)>([^<]+)<\/h2>/gi, (match, attrs, content) => {
+    // Check against banned patterns
+    for (const pattern of BANNED_H2_PATTERNS_V2) {
+      if (pattern.test(content)) {
+        fixed++;
+        // Determine section type from content
+        let sectionType = 'default';
+        if (/why|choose|trust/i.test(content)) sectionType = 'why_choose';
+        if (/process|how|work/i.test(content)) sectionType = 'process';
+        if (/service|offer/i.test(content)) sectionType = 'services';
+        
+        const newHeading = rewriteUnnaturalHeading(content, keyword, city, sectionType);
+        console.log(`[Heading Fix] "${content}" -> "${newHeading}"`);
+        return `<h2${attrs}>${newHeading}</h2>`;
+      }
+    }
+    return match;
+  });
+  
+  return { html: result, fixed };
+}
+
+/**
+ * Limit repeated phrases within a single piece of content
+ * (e.g., "Seven Oaks" appearing 5+ times in one section)
+ */
+function limitWithinSectionRepetition(
+  html: string,
+  maxOccurrences: number = 2
+): { html: string; replacements: number } {
+  let replacements = 0;
+  
+  // Track phrase counts
+  const phraseCounts: Record<string, number> = {};
+  
+  // Common phrases that get repeated too often
+  const trackPhrases = [
+    // Neighborhoods (will be dynamically detected)
+    /\b(Seven Oaks|Meadow Point[e]?|Lexington Oaks|Northwood|Collier Heights)\b/gi,
+    // Common descriptors
+    /\b(experienced HVAC professionals?)\b/gi,
+    /\b(local AC technicians?)\b/gi,
+    /\b(expert cooling system)\b/gi,
+    /\b(professional air conditioning)\b/gi,
+  ];
+  
+  let result = html;
+  
+  for (const phraseRegex of trackPhrases) {
+    let count = 0;
+    result = result.replace(phraseRegex, (match) => {
+      const key = match.toLowerCase();
+      phraseCounts[key] = (phraseCounts[key] || 0) + 1;
+      count++;
+      
+      if (count > maxOccurrences) {
+        replacements++;
+        // Replace with generic alternative
+        if (/seven oaks|meadow|lexington|northwood|collier/i.test(match)) {
+          return 'the area';
+        }
+        if (/technicians?/i.test(match)) {
+          return 'our team';
+        }
+        if (/professionals?/i.test(match)) {
+          return 'our experts';
+        }
+        return 'our services';
+      }
+      return match;
+    });
+  }
+  
+  return { html: result, replacements };
 }
 
 // Keyword density checker
@@ -794,7 +936,8 @@ function htmlSafePostProcess(
   html: string,
   keyword: string,
   niche: string,
-  variations: string[]
+  variations: string[],
+  city: string = '' // Add city parameter
 ): { html: string; fixes: string[] } {
   const fixes: string[] = [];
   let result = html;
@@ -802,6 +945,22 @@ function htmlSafePostProcess(
   // Step 1: Case correction in headings ONLY
   result = fixHeadingCase(result, niche);
   fixes.push('Applied heading case corrections');
+  
+  // Step 1.5: Fix banned heading patterns (NEW)
+  if (city) {
+    const { html: headingFixed, fixed: headingCount } = fixBannedHeadingPatterns(result, keyword, city);
+    if (headingCount > 0) {
+      result = headingFixed;
+      fixes.push(`Rewrote ${headingCount} unnatural heading(s)`);
+    }
+  }
+  
+  // Step 1.6: Limit within-section repetition (NEW)
+  const { html: repLimited, replacements } = limitWithinSectionRepetition(result, 2);
+  if (replacements > 0) {
+    result = repLimited;
+    fixes.push(`Limited ${replacements} repeated phrase(s)`);
+  }
   
   // Step 2: Fix keyword density
   const densityCheck = checkKeywordDensity(result, keyword, 1.0);
@@ -838,9 +997,10 @@ function sanitizeContent(
   keyword: string,
   pageType: PageType,
   variations: string[],
-  niche: string
+  niche: string,
+  city: string = '' // Add city parameter
 ): { html: string; fixes: string[] } {
-  const { html: processed, fixes } = htmlSafePostProcess(html, keyword, niche, variations);
+  const { html: processed, fixes } = htmlSafePostProcess(html, keyword, niche, variations, city);
   
   // Additional trimming if needed
   const limits = WORD_LIMITS[pageType];
@@ -1701,7 +1861,8 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
       html, 
       page.focusKeyword, 
       context.niche,
-      keywordVariations
+      keywordVariations,
+      context.city // Pass city for heading rewrites
     );
     html = sanitizedHtml;
     fixes.forEach(fix => console.log(`[Fix] ${fix}`));
