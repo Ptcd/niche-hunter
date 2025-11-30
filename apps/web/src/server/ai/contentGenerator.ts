@@ -591,7 +591,7 @@ Output format (JSON only, no markdown):
   try {
     const completion = await callWithFallback({
       model,
-      max_completion_tokens: 200,
+      max_completion_tokens: 1000,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt.trim() },
@@ -678,7 +678,7 @@ Return simple, visual search terms that will work well on Unsplash.`;
   try {
     const completion = await callWithFallback({
       model,
-      max_completion_tokens: 200,
+      max_completion_tokens: 1000,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt.trim() },
@@ -856,7 +856,7 @@ Output ONLY the HTML content text (no markdown, no code blocks, no backticks). D
   try {
     const completion = await callWithFallback({
       model,
-      max_completion_tokens: Math.ceil(skeleton.targetWordCount * 1.5), // Rough estimate
+      max_completion_tokens: Math.ceil(skeleton.targetWordCount * 6), // GPT-5 needs extra tokens for reasoning
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt.trim() },
