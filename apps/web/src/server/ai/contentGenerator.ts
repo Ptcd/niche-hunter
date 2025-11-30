@@ -1974,6 +1974,33 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
         metadata: { targetWordCount: 250 },
       });
     }
+    
+    // CRITICAL: For HOME pages, add/update services section with internal links
+    if (page.pageType === PageType.HOME) {
+      const hasServicesSection = sections.some(s => s.type === 'services-grid' || s.id === 'services');
+      
+      if (siteServices.length > 0) {
+        const servicesHtml = generateServicesHtml(siteServices, context.city, context.brand.name);
+        
+        if (hasServicesSection) {
+          // Update existing services section with database-linked content
+          const servicesIdx = sections.findIndex(s => s.type === 'services-grid' || s.id === 'services');
+          if (servicesIdx !== -1) {
+            sections[servicesIdx].content = servicesHtml;
+          }
+        } else {
+          // Add new services section - insert after hero and intro (position 2)
+          const insertPosition = Math.min(2, sections.length);
+          sections.splice(insertPosition, 0, {
+            id: 'services',
+            type: 'services-grid',
+            heading: 'Our Services',
+            content: servicesHtml,
+            metadata: { targetWordCount: 200 },
+          });
+        }
+      }
+    }
   } else {
     // Fallback: generate default sections based on page type
     sections.push(...await generateDefaultSections(page.pageType, context, page, model, externalResources, allVariations, conceptMemory, siteServices));
