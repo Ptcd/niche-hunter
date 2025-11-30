@@ -58,6 +58,57 @@ function checkKeywordDensity(
   };
 }
 
+/**
+ * Generate keyword variations to prevent keyword stuffing
+ * Returns 8-10 natural variations of the focus keyword
+ */
+async function generateKeywordVariations(
+  focusKeyword: string,
+  niche: string,
+  city: string,
+  state: string
+): Promise<string[]> {
+  try {
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      max_tokens: 200,
+      stream: false,
+      messages: [
+        {
+          role: 'system',
+          content: 'Generate keyword variations to avoid stuffing. Return JSON object with "variations" array.'
+        },
+        {
+          role: 'user',
+          content: `Generate 8 natural variations of "${focusKeyword}" for a ${niche} business in ${city}, ${state}.
+
+Include:
+- Service-only (no location): e.g., "AC repair services"
+- Location-only: e.g., "${city} AC services"  
+- Professional versions: e.g., "professional AC repair"
+- Generic versions: e.g., "repair services", "our technicians"
+
+Return JSON object with "variations" array of strings only, no markdown:
+{"variations": ["variation 1", "variation 2", ...]}`
+        }
+      ],
+      response_format: { type: 'json_object' }
+    });
+
+    const content = completion.choices[0]?.message?.content;
+    if (!content) return [];
+    
+    const parsed = JSON.parse(content);
+    const variations = Array.isArray(parsed) ? parsed : parsed.variations || [];
+    
+    // Filter out empty strings and ensure we have at least a few
+    return variations.filter((v: any) => typeof v === 'string' && v.trim().length > 0).slice(0, 10);
+  } catch (error) {
+    console.error('[generateKeywordVariations] Error:', error);
+    return []; // Fallback: no variations, GPT will improvise
+  }
+}
+
 // Direct API call with detailed logging (no fallback per user request)
 async function callWithFallback(
   createOptions: Omit<OpenAI.Chat.ChatCompletionCreateParams, 'model'> & { model: string }
@@ -218,6 +269,15 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
   const pageKeywords = [page.focusKeyword, ...(page.supportingKeywords || [])];
   const externalResources = getExternalLinksForPrompt(context.niche, pageKeywords, 2);
 
+  // Generate keyword variations to prevent stuffing
+  const keywordVariations = await generateKeywordVariations(
+    page.focusKeyword,
+    context.niche,
+    context.city,
+    context.state
+  );
+  console.log(`[Content Quality] Generated ${keywordVariations.length} keyword variations`);
+
   // If no skeletons exist, build them from blueprints first
   if (page.skeletons.length === 0) {
     console.log(`[generatePageContent] No skeletons found for page ${pageId}, building from blueprints...`);
@@ -287,7 +347,8 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
         model,
         externalResources,
         keywordUsageCount, // Pass current keyword count
-        maxWords - totalWordCount // Pass remaining word budget
+        maxWords - totalWordCount, // Pass remaining word budget
+        keywordVariations // Pass approved variations
       );
       
       // Count keyword usage in this section
@@ -358,7 +419,8 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
         model,
         externalResources,
         keywordUsageCount,
-        maxWords - totalWordCount
+        maxWords - totalWordCount,
+        keywordVariations
       );
       
       const faqKeywordCount = (faqContent.match(new RegExp(page.focusKeyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')) || []).length;
@@ -397,7 +459,8 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
         model,
         externalResources,
         keywordUsageCount,
-        maxWords - totalWordCount
+        maxWords - totalWordCount,
+        keywordVariations
       );
       
       const caseKeywordCount = (caseStudyContent.match(new RegExp(page.focusKeyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')) || []).length;
@@ -436,7 +499,8 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
         model,
         externalResources,
         keywordUsageCount,
-        maxWords - totalWordCount
+        maxWords - totalWordCount,
+        keywordVariations
       );
       
       const neighborhoodsKeywordCount = (neighborhoodsContent.match(new RegExp(page.focusKeyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')) || []).length;
@@ -453,7 +517,7 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
     }
   } else {
     // Fallback: generate default sections based on page type
-    sections.push(...await generateDefaultSections(page.pageType, context, page, model, externalResources));
+    sections.push(...await generateDefaultSections(page.pageType, context, page, model, externalResources, keywordVariations));
   }
 
   // Inject internal links into each section's content
@@ -843,7 +907,8 @@ async function generateSectionContent(
   model: string = 'gpt-4o-mini',
   externalResources: string = '',
   keywordUsageCount: number = 0,
-  remainingWordBudget: number = Infinity
+  remainingWordBudget: number = Infinity,
+  keywordVariations: string[] = []
 ): Promise<string> {
   // Extract service name from focus keyword (e.g., "ac repair in Wesley Chapel" -> "AC Repair")
   const extractServiceName = (focusKeyword: string): string => {
@@ -902,6 +967,10 @@ CRITICAL SEO AUDIT REQUIREMENTS:
     ? `\n\nExternal Resources (cite 1-2 naturally in your content):\n${externalResources}\n\nWhen referencing these resources, use natural language like "According to [Resource Name]" or "As noted by [Resource Name]".`
     : '';
 
+  const variationsText = keywordVariations.length > 0
+    ? `\n- APPROVED VARIATIONS (use these instead of repeating the exact keyword "${page.focusKeyword}"):\n${keywordVariations.map(v => `  * "${v}"`).join('\n')}`
+    : '';
+
   const userPrompt = `
 Write content for a ${page.pageType} page section.
 
@@ -930,8 +999,7 @@ SEO AUDIT REQUIREMENTS (CRITICAL - MUST FOLLOW):
   * Keyword "${page.focusKeyword}" has been used ${keywordUsageCount} times in previous sections
   * MAXIMUM 4-8 exact matches allowed across the ENTIRE page
   * You may use the keyword ${Math.max(0, Math.min(2, 8 - keywordUsageCount))} more time(s) in this section
-  * If ${keywordUsageCount} >= 4, DO NOT use the exact keyword "${page.focusKeyword}" in this section - use variations only
-  * Use natural variations instead: "${page.focusKeyword.split(' in ')[0] || page.focusKeyword}", "${serviceName}", "AC repair services", etc.
+  * If ${keywordUsageCount} >= 4, DO NOT use the exact keyword "${page.focusKeyword}" in this section - use variations only${variationsText}
 - Primary keyword placement:
   * FIRST SENTENCE of this section (if this is intro/hero section, this is MANDATORY - but only if keyword count < 4)
   * First paragraph (if this is intro/hero section, keyword must be in first 50 words - but only if keyword count < 4)
@@ -1053,7 +1121,8 @@ async function generateDefaultSections(
   context: PageContext,
   page: { focusKeyword: string; pageType: PageType },
   model: string = 'gpt-4o-mini',
-  externalResources: string = ''
+  externalResources: string = '',
+  keywordVariations: string[] = []
 ): Promise<Section[]> {
   const sections: Section[] = [];
 
@@ -1269,7 +1338,10 @@ async function generateDefaultSections(
           context,
           pageSpec,
           model,
-          externalResources
+          externalResources,
+          0, // keywordUsageCount (default sections don't track)
+          Infinity, // remainingWordBudget (default sections don't track)
+          keywordVariations
         );
       } catch (error) {
         console.error(`Failed to generate content for section ${section.id}:`, error);
