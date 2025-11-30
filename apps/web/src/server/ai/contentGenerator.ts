@@ -237,6 +237,57 @@ const DEFAULT_NICHE_VARIATIONS = {
   benefits: ['quality results', 'peace of mind', 'professional work', 'reliable solutions', 'customer satisfaction'],
 };
 
+// Niche-specific service pages for internal linking
+const NICHE_SERVICES: Record<string, { 
+  name: string; 
+  slugBase: string; 
+  synonyms: string[];
+  description: string;
+}[]> = {
+  hvac: [
+    { name: 'AC Repair', slugBase: 'ac-repair', synonyms: ['Cooling Repair', 'Air Conditioning Repair'], description: 'Fast, reliable air conditioning repair services' },
+    { name: 'AC Installation', slugBase: 'ac-installation', synonyms: ['AC System Install', 'New AC Unit'], description: 'Professional AC installation for homes and businesses' },
+    { name: 'HVAC Maintenance', slugBase: 'hvac-maintenance', synonyms: ['AC Tune-Up', 'System Maintenance'], description: 'Keep your system running efficiently year-round' },
+    { name: 'Heating Repair', slugBase: 'heating-repair', synonyms: ['Furnace Repair', 'Heater Service'], description: 'Expert heating system repair and diagnostics' },
+    { name: 'Duct Cleaning', slugBase: 'duct-cleaning', synonyms: ['Air Duct Service', 'Ductwork Cleaning'], description: 'Improve air quality with professional duct cleaning' },
+    { name: 'Indoor Air Quality', slugBase: 'indoor-air-quality', synonyms: ['Air Purification', 'IAQ Services'], description: 'Breathe easier with our air quality solutions' },
+  ],
+  plumbing: [
+    { name: 'Drain Cleaning', slugBase: 'drain-cleaning', synonyms: ['Clogged Drain Repair', 'Drain Service'], description: 'Clear stubborn clogs and restore proper flow' },
+    { name: 'Leak Detection', slugBase: 'leak-detection', synonyms: ['Leak Repair', 'Water Leak Service'], description: 'Find and fix leaks before they cause damage' },
+    { name: 'Water Heater Repair', slugBase: 'water-heater-repair', synonyms: ['Hot Water Service', 'Water Heater Service'], description: 'Restore hot water quickly with expert repairs' },
+    { name: 'Pipe Repair', slugBase: 'pipe-repair', synonyms: ['Pipe Services', 'Repiping'], description: 'Professional pipe repair and replacement' },
+    { name: 'Sewer Line Services', slugBase: 'sewer-line-services', synonyms: ['Sewer Repair', 'Sewer Cleaning'], description: 'Complete sewer line inspection and repair' },
+  ],
+  roofing: [
+    { name: 'Roof Repair', slugBase: 'roof-repair', synonyms: ['Roofing Repair', 'Roof Fix'], description: 'Quick repairs for leaks, damage, and wear' },
+    { name: 'Roof Replacement', slugBase: 'roof-replacement', synonyms: ['New Roof', 'Roof Install'], description: 'Full roof replacement with quality materials' },
+    { name: 'Roof Inspections', slugBase: 'roof-inspections', synonyms: ['Roof Assessment', 'Roof Evaluation'], description: 'Thorough inspections to identify problems early' },
+    { name: 'Storm Damage Repair', slugBase: 'storm-damage-repair', synonyms: ['Emergency Roofing', 'Hail Damage Repair'], description: 'Fast response for storm and weather damage' },
+    { name: 'Gutter Installation', slugBase: 'gutter-installation', synonyms: ['Gutter Services', 'Gutter Repair'], description: 'Protect your home with proper gutter systems' },
+  ],
+  'junk-removal': [
+    { name: 'Junk Car Removal', slugBase: 'junk-car-removal', synonyms: ['Cash for Cars', 'Car Pickup'], description: 'Get cash for your junk car with free pickup' },
+    { name: 'Furniture Removal', slugBase: 'furniture-removal', synonyms: ['Furniture Hauling', 'Furniture Disposal'], description: 'Easy removal of old furniture and appliances' },
+    { name: 'Estate Cleanouts', slugBase: 'estate-cleanouts', synonyms: ['Property Cleanout', 'House Cleanout'], description: 'Complete estate and property cleanout services' },
+    { name: 'Construction Debris', slugBase: 'construction-debris', synonyms: ['Debris Removal', 'Demo Cleanup'], description: 'Fast removal of construction waste and debris' },
+  ],
+  electrical: [
+    { name: 'Electrical Repair', slugBase: 'electrical-repair', synonyms: ['Electrical Service', 'Electrical Fix'], description: 'Safe, reliable electrical repairs' },
+    { name: 'Panel Upgrades', slugBase: 'panel-upgrades', synonyms: ['Electrical Panel', 'Breaker Panel'], description: 'Upgrade your electrical panel for modern needs' },
+    { name: 'Outlet Installation', slugBase: 'outlet-installation', synonyms: ['Outlet Repair', 'Switch Installation'], description: 'New outlets and switches installed safely' },
+    { name: 'Lighting Installation', slugBase: 'lighting-installation', synonyms: ['Light Fixture', 'Lighting Service'], description: 'Professional lighting design and installation' },
+    { name: 'Generator Services', slugBase: 'generator-services', synonyms: ['Backup Generator', 'Generator Install'], description: 'Keep your power on with generator solutions' },
+  ],
+  flooring: [
+    { name: 'Flooring Installation', slugBase: 'flooring-installation', synonyms: ['Floor Install', 'New Flooring'], description: 'Expert installation of all flooring types' },
+    { name: 'Hardwood Refinishing', slugBase: 'hardwood-refinishing', synonyms: ['Wood Floor Refinish', 'Hardwood Restoration'], description: 'Restore the beauty of your hardwood floors' },
+    { name: 'Tile Installation', slugBase: 'tile-installation', synonyms: ['Tile Flooring', 'Ceramic Tile'], description: 'Beautiful tile installation for any room' },
+    { name: 'Carpet Installation', slugBase: 'carpet-installation', synonyms: ['Carpet Service', 'New Carpet'], description: 'Quality carpet installation and replacement' },
+    { name: 'Floor Repair', slugBase: 'floor-repair', synonyms: ['Flooring Repair', 'Floor Fix'], description: 'Repair damaged or worn flooring' },
+  ],
+};
+
 /**
  * Get variation pools for a specific niche
  */
@@ -256,6 +307,100 @@ function getNicheVariations(niche: string): {
 function getRandomVariations(pool: string[], count: number): string[] {
   const shuffled = [...pool].sort(() => Math.random() - 0.5);
   return shuffled.slice(0, count);
+}
+
+/**
+ * Service item interface for services section
+ */
+interface ServiceItem {
+  name: string;
+  slug: string;
+  description: string;
+  synonyms: string[];
+}
+
+/**
+ * Resolve services for a site - pulls from database first, falls back to niche dictionary
+ */
+async function resolveServicesForSite(
+  siteId: string,
+  niche: string,
+  city: string
+): Promise<ServiceItem[]> {
+  // First, get actual CORE_SERVICE pages from database
+  const servicePages = await prisma.sitePage.findMany({
+    where: { 
+      siteId, 
+      pageType: PageType.CORE_SERVICE 
+    },
+    select: { 
+      slug: true, 
+      focusKeyword: true, 
+      titleTag: true,
+      seoDescription: true,
+    }
+  });
+  
+  if (servicePages.length > 0) {
+    return servicePages.map(p => ({
+      name: p.focusKeyword || p.titleTag || 'Service',
+      slug: p.slug || '',
+      description: p.seoDescription || `Professional ${p.focusKeyword} services`,
+      synonyms: [],
+    }));
+  }
+  
+  // Fallback to niche dictionary
+  const normalizedNiche = niche.toLowerCase().replace(/\s+/g, '-');
+  const nicheServices = NICHE_SERVICES[normalizedNiche] || NICHE_SERVICES['hvac']; // Default fallback
+  
+  // Generate slugs with city
+  const citySlug = city.toLowerCase().replace(/\s+/g, '-');
+  return nicheServices.map(s => ({
+    name: s.name,
+    slug: `${s.slugBase}-${citySlug}`,
+    description: s.description,
+    synonyms: s.synonyms,
+  }));
+}
+
+/**
+ * Generate services section HTML with internal links
+ */
+function generateServicesHtml(
+  services: ServiceItem[],
+  city: string,
+  brandName: string,
+  maxServices: number = 6
+): string {
+  const displayServices = services.slice(0, maxServices);
+  
+  // Randomize section title
+  const titles = [
+    'Our Services',
+    'What We Offer',
+    `Services in ${city}`,
+    'How We Can Help',
+    'Our Professional Services',
+  ];
+  const title = titles[Math.floor(Math.random() * titles.length)];
+  
+  // Build service cards HTML
+  const serviceCards = displayServices.map(s => `
+    <div class="service-card">
+      <h3><a href="/${s.slug}">${s.name}</a></h3>
+      <p>${s.description}</p>
+      <a href="/${s.slug}" class="service-link">Learn More →</a>
+    </div>
+  `).join('\n');
+  
+  return `
+    <h2>${title}</h2>
+    <p>At ${brandName}, we provide a full range of professional services to help homeowners and businesses across ${city}.</p>
+    <div class="services-grid">
+      ${serviceCards}
+    </div>
+  `;
 }
 
 /**
@@ -1508,6 +1653,13 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
     supportingKeywords: p.supportingKeywords || [],
   }));
 
+  // Resolve services for this site (for homepage services section)
+  const siteServices = await resolveServicesForSite(
+    site.id,
+    context.niche,
+    context.city
+  );
+
   // Get external resources for this page
   const pageKeywords = [page.focusKeyword, ...(page.supportingKeywords || [])];
   const externalResources = getExternalLinksForPrompt(context.niche, pageKeywords, 2);
@@ -1824,7 +1976,7 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
     }
   } else {
     // Fallback: generate default sections based on page type
-    sections.push(...await generateDefaultSections(page.pageType, context, page, model, externalResources, allVariations, conceptMemory));
+    sections.push(...await generateDefaultSections(page.pageType, context, page, model, externalResources, allVariations, conceptMemory, siteServices));
   }
 
   // Inject internal links into each section's content
@@ -2446,7 +2598,8 @@ async function generateDefaultSections(
   model: string = 'gpt-4o-mini',
   externalResources: string = '',
   allVariations: string[] = [], // Changed from keywordVariations to allVariations
-  conceptMemory?: ConceptMemory
+  conceptMemory?: ConceptMemory,
+  services?: ServiceItem[]  // NEW PARAMETER
 ): Promise<Section[]> {
   const sections: Section[] = [];
 
@@ -2470,7 +2623,9 @@ async function generateDefaultSections(
           id: 'services',
           type: 'services-grid',
           heading: 'Our Services',
-          content: `Expert ${page.focusKeyword} services\nProfessional installation\nEmergency repairs\nMaintenance plans\nQuality guarantees`,
+          content: services && services.length > 0
+            ? generateServicesHtml(services, context.city, context.brand.name)
+            : `Expert ${page.focusKeyword} services available.`,
         },
         {
           id: 'neighborhoods',
