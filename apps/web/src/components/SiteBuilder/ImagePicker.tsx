@@ -45,16 +45,38 @@ export default function ImagePicker({
   const [searchQuery, setSearchQuery] = useState('');
   const [photos, setPhotos] = useState<UnsplashPhoto[]>([]);
   const [loading, setLoading] = useState(false);
-  const [selectedPhoto, setSelectedPhoto] = useState<UnsplashPhoto | null>(null);
+  const [selectedPhotos, setSelectedPhotos] = useState<UnsplashPhoto[]>([]);
   const [saving, setSaving] = useState(false);
   const [customAltText, setCustomAltText] = useState('');
+  const [suggestedKeywords, setSuggestedKeywords] = useState<string[]>([]);
 
-  // Auto-search on mount
+  // Fetch suggested keywords and initial search on mount
   useEffect(() => {
-    const defaultQuery = `${focusKeyword} ${city}`;
-    setSearchQuery(defaultQuery);
-    handleSearch(defaultQuery);
-  }, []);
+    const fetchSuggestions = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(
+          `/api/v5000/sites/${siteId}/pages/${pageId}/search-images?suggestionsOnly=true`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          const suggestions = data.suggestedKeywords || [];
+          setSuggestedKeywords(suggestions);
+          
+          // Auto-search with first suggestion
+          if (suggestions.length > 0) {
+            setSearchQuery(suggestions[0]);
+            handleSearch(suggestions[0]);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching suggestions:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchSuggestions();
+  }, [siteId, pageId]);
 
   const handleSearch = async (query?: string) => {
     const searchTerm = query || searchQuery;
@@ -80,20 +102,43 @@ export default function ImagePicker({
     }
   };
 
+  const togglePhotoSelection = (photo: UnsplashPhoto) => {
+    setSelectedPhotos(prev => {
+      const isSelected = prev.some(p => p.id === photo.id);
+      if (isSelected) {
+        return prev.filter(p => p.id !== photo.id);
+      } else {
+        // Limit to 3 images
+        if (prev.length >= 3) {
+          alert('Maximum 3 images per page');
+          return prev;
+        }
+        return [...prev, photo];
+      }
+    });
+  };
+
   const handleSelect = async () => {
-    if (!selectedPhoto) {
-      alert('Please select an image');
+    if (selectedPhotos.length === 0) {
+      alert('Please select at least one image');
       return;
     }
 
     setSaving(true);
     try {
+      // Save the first selected image as the primary hero image
+      const primaryPhoto = selectedPhotos[0];
       const res = await fetch(`/api/v5000/sites/${siteId}/pages/${pageId}/set-image`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          imageUrl: selectedPhoto.urls.regular,
+          imageUrl: primaryPhoto.urls.regular,
           altText: customAltText.trim() || undefined,
+          // Include all selected images for future multi-image support
+          additionalImages: selectedPhotos.slice(1).map(p => ({
+            url: p.urls.regular,
+            alt: p.alt_description || p.description || '',
+          })),
         }),
       });
 
@@ -157,6 +202,38 @@ export default function ImagePicker({
           </button>
         </div>
 
+        {/* Suggested Keywords */}
+        {suggestedKeywords.length > 0 && (
+          <div style={{ marginBottom: '1rem' }}>
+            <div style={{ fontSize: '0.875rem', color: '#666', marginBottom: '0.5rem' }}>
+              Suggested searches:
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+              {suggestedKeywords.map((keyword, index) => (
+                <button
+                  key={index}
+                  onClick={() => {
+                    setSearchQuery(keyword);
+                    handleSearch(keyword);
+                  }}
+                  style={{
+                    padding: '0.375rem 0.75rem',
+                    backgroundColor: searchQuery === keyword ? '#0070f3' : '#f0f0f0',
+                    color: searchQuery === keyword ? 'white' : '#333',
+                    border: 'none',
+                    borderRadius: '20px',
+                    cursor: 'pointer',
+                    fontSize: '0.875rem',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  {keyword}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Search */}
         <div style={{ marginBottom: '1.5rem', display: 'flex', gap: '0.5rem' }}>
           <input
@@ -192,6 +269,20 @@ export default function ImagePicker({
           </button>
         </div>
 
+        {/* Selection Info */}
+        {selectedPhotos.length > 0 && (
+          <div style={{
+            marginBottom: '1rem',
+            padding: '0.75rem',
+            backgroundColor: '#e8f4fd',
+            borderRadius: '4px',
+            fontSize: '0.875rem',
+            color: '#0070f3',
+          }}>
+            {selectedPhotos.length} image{selectedPhotos.length > 1 ? 's' : ''} selected (max 3)
+          </div>
+        )}
+
         {/* Current Image */}
         {currentImageUrl && (
           <div style={{ marginBottom: '1.5rem', padding: '1rem', backgroundColor: '#f8f9fa', borderRadius: '4px' }}>
@@ -221,63 +312,77 @@ export default function ImagePicker({
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
                 gap: '1rem',
                 marginBottom: '1.5rem',
               }}
             >
-              {photos.map((photo) => (
-                <div
-                  key={photo.id}
-                  onClick={() => setSelectedPhoto(photo)}
-                  style={{
-                    position: 'relative',
-                    cursor: 'pointer',
-                    border: selectedPhoto?.id === photo.id ? '3px solid #0070f3' : '1px solid #ddd',
-                    borderRadius: '4px',
-                    overflow: 'hidden',
-                    backgroundColor: '#f8f9fa',
-                  }}
-                >
-                  <img
-                    src={photo.urls.small}
-                    alt={photo.alt_description || photo.description || 'Stock photo'}
+              {photos.map((photo) => {
+                const isSelected = selectedPhotos.some(p => p.id === photo.id);
+                const selectionIndex = selectedPhotos.findIndex(p => p.id === photo.id);
+                return (
+                  <div
+                    key={photo.id}
+                    onClick={() => togglePhotoSelection(photo)}
                     style={{
-                      width: '100%',
-                      height: '150px',
-                      objectFit: 'cover',
+                      position: 'relative',
+                      cursor: 'pointer',
+                      border: isSelected ? '3px solid #0070f3' : '1px solid #ddd',
+                      borderRadius: '4px',
+                      overflow: 'hidden',
+                      backgroundColor: '#f8f9fa',
+                      transition: 'all 0.2s',
                     }}
-                  />
-                  {selectedPhoto?.id === photo.id && (
-                    <div
+                  >
+                    <img
+                      src={photo.urls.small}
+                      alt={photo.alt_description || photo.description || 'Stock photo'}
                       style={{
-                        position: 'absolute',
-                        top: '0.5rem',
-                        right: '0.5rem',
-                        backgroundColor: '#0070f3',
-                        color: 'white',
-                        borderRadius: '50%',
-                        width: '24px',
-                        height: '24px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '0.875rem',
-                        fontWeight: 'bold',
+                        width: '100%',
+                        height: '140px',
+                        objectFit: 'cover',
                       }}
-                    >
-                      ✓
+                    />
+                    {isSelected && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: '0.5rem',
+                          right: '0.5rem',
+                          backgroundColor: '#0070f3',
+                          color: 'white',
+                          borderRadius: '50%',
+                          width: '24px',
+                          height: '24px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '0.75rem',
+                          fontWeight: 'bold',
+                        }}
+                      >
+                        {selectionIndex + 1}
+                      </div>
+                    )}
+                    <div style={{
+                      padding: '0.5rem',
+                      fontSize: '0.75rem',
+                      color: '#666',
+                      backgroundColor: 'white',
+                      borderTop: '1px solid #eee',
+                    }}>
+                      by {photo.user.name}
                     </div>
-                  )}
-                </div>
-              ))}
+                  </div>
+                );
+              })}
             </div>
 
             {/* Custom Alt Text */}
-            {selectedPhoto && (
+            {selectedPhotos.length > 0 && (
               <div style={{ marginBottom: '1.5rem' }}>
                 <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-                  Alt Text (optional - auto-generated if empty)
+                  Primary Image Alt Text (optional)
                 </label>
                 <input
                   type="text"
@@ -313,17 +418,17 @@ export default function ImagePicker({
               </button>
               <button
                 onClick={handleSelect}
-                disabled={!selectedPhoto || saving}
+                disabled={selectedPhotos.length === 0 || saving}
                 style={{
                   padding: '0.5rem 1rem',
-                  backgroundColor: !selectedPhoto || saving ? '#ccc' : '#0070f3',
+                  backgroundColor: selectedPhotos.length === 0 || saving ? '#ccc' : '#0070f3',
                   color: 'white',
                   border: 'none',
                   borderRadius: '4px',
-                  cursor: !selectedPhoto || saving ? 'not-allowed' : 'pointer',
+                  cursor: selectedPhotos.length === 0 || saving ? 'not-allowed' : 'pointer',
                 }}
               >
-                {saving ? 'Saving...' : 'Select Image'}
+                {saving ? 'Saving...' : `Select ${selectedPhotos.length} Image${selectedPhotos.length !== 1 ? 's' : ''}`}
               </button>
             </div>
           </>
