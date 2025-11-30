@@ -369,8 +369,9 @@ model Site {
   ivrGreeting       String?  // IVR greeting message
   ivrOptions        Json?    // Array of IVR menu options: [{digit: "1", label: "Sales", forwardTo: "+1234567890"}]
   registrar         String?  // "namecheap" | null
-  logoUrl           String?  // URL to logo image
+  logoUrl           String?  // URL to logo image (legacy, use SiteLogo.isActive)
   logoPromptHint    String?  // Optional user hint for logo style
+  logos             SiteLogo[] // All generated logos for this site
   promptProfileId   String?  // Link to PromptProfile
   promptProfile     PromptProfile? @relation(fields: [promptProfileId], references: [id])
   // Phone number options
@@ -602,6 +603,22 @@ model SiteCostLog {
   
   @@index([siteId])
   @@index([date])
+}
+
+model SiteLogo {
+  id String @id @default(cuid())
+  siteId String
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  
+  logoUrl String // URL to the logo image
+  conceptName String? // Name of the concept used (e.g., "Modern Geometric")
+  prompt String? // The DALL-E prompt used to generate this logo
+  isActive Boolean @default(false) // Whether this is the currently active logo
+  
+  createdAt DateTime @default(now())
+  
+  @@index([siteId])
+  @@index([siteId, isActive])
 }
 
 model Alert {

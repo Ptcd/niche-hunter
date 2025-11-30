@@ -35,6 +35,14 @@ interface LogoConcept {
   prompt: string;
 }
 
+interface SiteLogo {
+  id: string;
+  logoUrl: string;
+  conceptName: string | null;
+  isActive: boolean;
+  createdAt: string;
+}
+
 export default function LogoPanel({ siteId, logoUrl, brandName, niche, city, state, onLogoUpdate }: LogoPanelProps) {
   const [concepts, setConcepts] = useState<LogoConcept[]>([]);
   const [loadingConcepts, setLoadingConcepts] = useState(false);
@@ -42,12 +50,32 @@ export default function LogoPanel({ siteId, logoUrl, brandName, niche, city, sta
   const [selectedConcept, setSelectedConcept] = useState<LogoConcept | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [prompt, setPrompt] = useState('');
+  const [logoHistory, setLogoHistory] = useState<SiteLogo[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(true);
 
   // Generate default prompt on mount
   useEffect(() => {
     const defaultPrompt = generateDefaultLogoPrompt(niche, city, state);
     setPrompt(defaultPrompt);
   }, [niche, city, state]);
+
+  // Fetch logo history on mount
+  useEffect(() => {
+    const fetchLogos = async () => {
+      try {
+        const res = await fetch(`/api/v5000/sites/${siteId}/logos`);
+        if (res.ok) {
+          const data = await res.json();
+          setLogoHistory(data.logos || []);
+        }
+      } catch (error) {
+        console.error('Error fetching logos:', error);
+      } finally {
+        setLoadingHistory(false);
+      }
+    };
+    fetchLogos();
+  }, [siteId, logoUrl]); // Refetch when logoUrl changes
 
   const handleGenerateConcepts = async () => {
     setLoadingConcepts(true);
@@ -81,12 +109,19 @@ export default function LogoPanel({ siteId, logoUrl, brandName, niche, city, sta
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customPrompt: concept.prompt,
+          conceptName: concept.name,
         }),
       });
 
       if (res.ok) {
         onLogoUpdate();
         setSelectedConcept(null);
+        // Refetch logo history
+        const logosRes = await fetch(`/api/v5000/sites/${siteId}/logos`);
+        if (logosRes.ok) {
+          const logosData = await logosRes.json();
+          setLogoHistory(logosData.logos || []);
+        }
       } else {
         const error = await res.json();
         alert(error.error || 'Failed to generate logo');
@@ -98,6 +133,31 @@ export default function LogoPanel({ siteId, logoUrl, brandName, niche, city, sta
       setSelectedConcept(null);
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const handleSetActiveLogo = async (logoId: string) => {
+    try {
+      const res = await fetch(`/api/v5000/sites/${siteId}/logos`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ logoId }),
+      });
+
+      if (res.ok) {
+        onLogoUpdate();
+        // Update local state
+        setLogoHistory(prev => prev.map(logo => ({
+          ...logo,
+          isActive: logo.id === logoId,
+        })));
+      } else {
+        const error = await res.json();
+        alert(error.error || 'Failed to set active logo');
+      }
+    } catch (error) {
+      console.error('Error setting active logo:', error);
+      alert('Failed to set active logo');
     }
   };
 
@@ -119,6 +179,12 @@ export default function LogoPanel({ siteId, logoUrl, brandName, niche, city, sta
 
       if (res.ok) {
         onLogoUpdate();
+        // Refetch logo history
+        const logosRes = await fetch(`/api/v5000/sites/${siteId}/logos`);
+        if (logosRes.ok) {
+          const logosData = await logosRes.json();
+          setLogoHistory(logosData.logos || []);
+        }
       } else {
         const error = await res.json();
         alert(error.error || 'Failed to generate logo');
@@ -341,6 +407,95 @@ export default function LogoPanel({ siteId, logoUrl, brandName, niche, city, sta
         )}
       </div>
       
+      {/* Logo History */}
+      {logoHistory.length > 0 && (
+        <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid #ddd' }}>
+          <h3 style={{ marginTop: 0, marginBottom: '1rem', fontSize: '1.1rem' }}>Previous Logos:</h3>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
+            gap: '1rem',
+          }}>
+            {logoHistory.map((logo) => (
+              <div
+                key={logo.id}
+                onClick={() => handleSetActiveLogo(logo.id)}
+                style={{
+                  border: logo.isActive ? '2px solid #0070f3' : '1px solid #ddd',
+                  borderRadius: '8px',
+                  padding: '0.75rem',
+                  backgroundColor: 'white',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  position: 'relative',
+                  boxShadow: logo.isActive ? '0 2px 8px rgba(0,112,243,0.2)' : '0 1px 3px rgba(0,0,0,0.1)',
+                }}
+                onMouseEnter={(e) => {
+                  if (!logo.isActive) {
+                    e.currentTarget.style.borderColor = '#0070f3';
+                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,112,243,0.1)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!logo.isActive) {
+                    e.currentTarget.style.borderColor = '#ddd';
+                    e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+                  }
+                }}
+              >
+                <img
+                  src={logo.logoUrl}
+                  alt={logo.conceptName || 'Logo'}
+                  style={{
+                    width: '100%',
+                    height: 'auto',
+                    borderRadius: '4px',
+                    marginBottom: '0.5rem',
+                  }}
+                />
+                {logo.isActive && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '0.5rem',
+                    right: '0.5rem',
+                    backgroundColor: '#0070f3',
+                    color: 'white',
+                    borderRadius: '50%',
+                    width: '20px',
+                    height: '20px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '0.75rem',
+                    fontWeight: 'bold',
+                  }}>
+                    ✓
+                  </div>
+                )}
+                {logo.conceptName && (
+                  <div style={{
+                    fontSize: '0.75rem',
+                    color: '#666',
+                    textAlign: 'center',
+                    fontWeight: logo.isActive ? 'bold' : 'normal',
+                  }}>
+                    {logo.conceptName}
+                  </div>
+                )}
+                <div style={{
+                  fontSize: '0.7rem',
+                  color: '#999',
+                  textAlign: 'center',
+                  marginTop: '0.25rem',
+                }}>
+                  {new Date(logo.createdAt).toLocaleDateString()}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {logoUrl && (
         <div style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: '#666' }}>
           Cost: ~$0.04 per generation

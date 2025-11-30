@@ -15,7 +15,7 @@ async function handler(req: NextApiRequest & { auth: any }, res: NextApiResponse
   }
 
   const { siteId } = req.query;
-  const { customPrompt, promptHint, rules } = req.body;
+  const { customPrompt, promptHint, rules, conceptName } = req.body;
 
   if (!siteId || typeof siteId !== 'string') {
     return res.status(400).json({ error: 'Invalid siteId' });
@@ -53,7 +53,24 @@ async function handler(req: NextApiRequest & { auth: any }, res: NextApiResponse
       rules: rules || undefined,
     });
 
-    // Update site with logo URL and prompt hint
+    // Deactivate all existing logos for this site
+    await prisma.siteLogo.updateMany({
+      where: { siteId },
+      data: { isActive: false },
+    });
+
+    // Create new logo entry in history
+    const newLogo = await prisma.siteLogo.create({
+      data: {
+        siteId,
+        logoUrl,
+        conceptName: conceptName || null,
+        prompt: customPrompt || null,
+        isActive: true,
+      },
+    });
+
+    // Update site with logo URL (for backwards compatibility)
     await prisma.site.update({
       where: { id: siteId },
       data: {
@@ -73,7 +90,7 @@ async function handler(req: NextApiRequest & { auth: any }, res: NextApiResponse
       },
     });
 
-    return res.status(200).json({ logoUrl });
+    return res.status(200).json({ logoUrl, logoId: newLogo.id });
   } catch (error: any) {
     console.error('[generate-logo] Error:', error);
     return res.status(500).json({ error: error.message || 'Failed to generate logo' });
