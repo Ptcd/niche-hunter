@@ -2445,7 +2445,7 @@ async function generateDefaultSections(
   page: { focusKeyword: string; pageType: PageType },
   model: string = 'gpt-4o-mini',
   externalResources: string = '',
-  keywordVariations: string[] = [],
+  allVariations: string[] = [], // Changed from keywordVariations to allVariations
   conceptMemory?: ConceptMemory
 ): Promise<Section[]> {
   const sections: Section[] = [];
