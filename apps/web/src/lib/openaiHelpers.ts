@@ -29,40 +29,45 @@ export const MODEL_FALLBACKS: Record<string, string[]> = {
 };
 
 /**
- * Make an OpenAI chat completion call with automatic fallback
- * Tries GPT-5 first, then falls back to GPT-4o if it fails
+ * Make an OpenAI chat completion call with detailed logging
  */
 export async function chatWithFallback(
   options: Omit<OpenAI.Chat.ChatCompletionCreateParams, 'model'> & { model: string }
 ): Promise<OpenAI.Chat.ChatCompletion> {
   const openai = getOpenAI();
-  const models = MODEL_FALLBACKS[options.model] || [options.model];
-  let lastError: Error | null = null;
+  const model = options.model;
   
-  for (const model of models) {
-    try {
-      console.log(`[OpenAI] Trying model: ${model}`);
-      const result = await openai.chat.completions.create({
-        ...options,
-        model,
-      });
-      
-      // Check if we got actual content
-      const content = result.choices[0]?.message?.content;
-      if (content && content.trim().length > 0) {
-        console.log(`[OpenAI] Success with model: ${model}`);
-        return result;
-      }
-      
-      console.warn(`[OpenAI] Model ${model} returned empty content, trying fallback...`);
-      lastError = new Error(`Model ${model} returned empty content`);
-    } catch (error: any) {
-      console.warn(`[OpenAI] Model ${model} failed: ${error.message}, trying fallback...`);
-      lastError = error;
+  console.log(`[OpenAI] Calling model: ${model}`);
+  console.log(`[OpenAI] Max tokens: ${options.max_tokens}`);
+  
+  try {
+    const result = await openai.chat.completions.create({
+      ...options,
+      model,
+    });
+    
+    console.log(`[OpenAI] Response from ${model}`);
+    console.log(`[OpenAI] Finish reason: ${result.choices[0]?.finish_reason}`);
+    console.log(`[OpenAI] Content length: ${result.choices[0]?.message?.content?.length || 0}`);
+    
+    // Check for refusal
+    const message = result.choices[0]?.message;
+    if ((message as any)?.refusal) {
+      console.error(`[OpenAI] Model refused: ${(message as any).refusal}`);
+      throw new Error(`GPT refused: ${(message as any).refusal}`);
     }
+    
+    const content = message?.content;
+    if (!content || content.trim().length === 0) {
+      console.error(`[OpenAI] Empty content. Full response:`, JSON.stringify(result, null, 2));
+      throw new Error(`GPT returned empty content. Finish reason: ${result.choices[0]?.finish_reason}`);
+    }
+    
+    return result;
+  } catch (error: any) {
+    console.error(`[OpenAI] Error:`, error.message);
+    throw error;
   }
-  
-  throw lastError || new Error('All models failed');
 }
 
 /**

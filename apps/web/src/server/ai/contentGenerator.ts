@@ -28,37 +28,47 @@ const MODEL_FALLBACKS: Record<string, string[]> = {
   'gpt-5-nano': ['gpt-5-nano', 'gpt-4o-mini'],
 };
 
-// Helper to make API call with fallback
+// Direct API call with detailed logging (no fallback per user request)
 async function callWithFallback(
   createOptions: Omit<OpenAI.Chat.ChatCompletionCreateParams, 'model'> & { model: string }
 ): Promise<OpenAI.Chat.ChatCompletion> {
-  const models = MODEL_FALLBACKS[createOptions.model] || [createOptions.model];
-  let lastError: Error | null = null;
+  const model = createOptions.model;
   
-  for (const model of models) {
-    try {
-      console.log(`[GPT] Trying model: ${model}`);
-      const result = await openai.chat.completions.create({
-        ...createOptions,
-        model,
-      });
-      
-      // Check if we got actual content
-      const content = result.choices[0]?.message?.content;
-      if (content && content.trim().length > 0) {
-        console.log(`[GPT] Success with model: ${model}`);
-        return result;
-      }
-      
-      console.warn(`[GPT] Model ${model} returned empty content, trying fallback...`);
-      lastError = new Error(`Model ${model} returned empty content`);
-    } catch (error: any) {
-      console.warn(`[GPT] Model ${model} failed: ${error.message}, trying fallback...`);
-      lastError = error;
+  console.log(`[GPT] Calling model: ${model}`);
+  console.log(`[GPT] Messages count: ${createOptions.messages.length}`);
+  console.log(`[GPT] Max tokens: ${createOptions.max_tokens}`);
+  
+  try {
+    const result = await openai.chat.completions.create({
+      ...createOptions,
+      model,
+    });
+    
+    console.log(`[GPT] Response received from ${model}`);
+    console.log(`[GPT] Choices count: ${result.choices?.length}`);
+    console.log(`[GPT] Finish reason: ${result.choices[0]?.finish_reason}`);
+    console.log(`[GPT] Content length: ${result.choices[0]?.message?.content?.length || 0}`);
+    console.log(`[GPT] Content preview: ${result.choices[0]?.message?.content?.substring(0, 100)}...`);
+    
+    // Check for refusal (GPT-5 can refuse)
+    const message = result.choices[0]?.message;
+    if (message?.refusal) {
+      console.error(`[GPT] Model refused: ${message.refusal}`);
+      throw new Error(`GPT refused: ${message.refusal}`);
     }
+    
+    const content = message?.content;
+    if (!content || content.trim().length === 0) {
+      console.error(`[GPT] Empty content. Full response:`, JSON.stringify(result, null, 2));
+      throw new Error(`GPT returned empty content. Finish reason: ${result.choices[0]?.finish_reason}`);
+    }
+    
+    return result;
+  } catch (error: any) {
+    console.error(`[GPT] Error with ${model}:`, error.message);
+    console.error(`[GPT] Full error:`, error);
+    throw error;
   }
-  
-  throw lastError || new Error('All models failed');
 }
 
 export interface PageContext {
