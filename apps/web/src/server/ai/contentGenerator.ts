@@ -28,10 +28,11 @@ const SUPPORTED_MODELS = ['gpt-4o', 'gpt-4o-mini'];
 const WORD_LIMITS: Record<PageType, { min: number; max: number }> = {
   HOME: { min: 1500, max: 2200 },
   CORE_SERVICE: { min: 800, max: 1200 },
+  SUPPORT: { min: 600, max: 1000 },
   CITY: { min: 600, max: 1000 },
   ABOUT: { min: 400, max: 800 },
   CONTACT: { min: 200, max: 400 },
-  FAQ: { min: 600, max: 1000 },
+  LEGAL: { min: 400, max: 800 },
 };
 
 // Title case function for H1 and page titles
