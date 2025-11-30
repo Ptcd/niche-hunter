@@ -24,6 +24,39 @@ const openai = new OpenAI({
 // Model configuration (GPT-4o models for content generation)
 const SUPPORTED_MODELS = ['gpt-4o', 'gpt-4o-mini'];
 
+// Word count limits by page type
+const WORD_LIMITS: Record<PageType, { min: number; max: number }> = {
+  HOME: { min: 1500, max: 2200 },
+  CORE_SERVICE: { min: 800, max: 1200 },
+  CITY: { min: 600, max: 1000 },
+  ABOUT: { min: 400, max: 800 },
+  CONTACT: { min: 200, max: 400 },
+  FAQ: { min: 600, max: 1000 },
+};
+
+// Title case function for H1 and page titles
+function toTitleCase(str: string): string {
+  return str.replace(/\b\w/g, c => c.toUpperCase());
+}
+
+// Keyword density checker
+function checkKeywordDensity(
+  content: string,
+  keyword: string,
+  maxPercent: number = 1.0
+): { density: number; isValid: boolean; count: number; wordCount: number } {
+  const words = content.split(/\s+/).filter(w => w.length > 0).length;
+  const keywordMatches = content.match(new RegExp(keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')) || [];
+  const keywordCount = keywordMatches.length;
+  const density = words > 0 ? (keywordCount / words) * 100 : 0;
+  return {
+    density: Math.round(density * 100) / 100, // Round to 2 decimals
+    isValid: density <= maxPercent,
+    count: keywordCount,
+    wordCount: words,
+  };
+}
+
 // Direct API call with detailed logging (no fallback per user request)
 async function callWithFallback(
   createOptions: Omit<OpenAI.Chat.ChatCompletionCreateParams, 'model'> & { model: string }
@@ -533,6 +566,27 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
   // Calculate word count
   const wordCount = html.split(/\s+/).length;
 
+  // Validate word count limits
+  const limits = WORD_LIMITS[page.pageType];
+  if (wordCount < limits.min || wordCount > limits.max) {
+    console.warn(
+      `[Content Quality] Word count ${wordCount} is outside limits for ${page.pageType} (${limits.min}-${limits.max})`
+    );
+  }
+
+  // Check keyword density
+  const densityCheck = checkKeywordDensity(html, page.focusKeyword, 1.0);
+  if (!densityCheck.isValid) {
+    console.warn(
+      `[Content Quality] Keyword density ${densityCheck.density}% exceeds 1% limit. ` +
+      `Keyword "${page.focusKeyword}" appears ${densityCheck.count} times in ${densityCheck.wordCount} words.`
+    );
+  } else {
+    console.log(
+      `[Content Quality] Keyword density: ${densityCheck.density}% (${densityCheck.count} occurrences in ${densityCheck.wordCount} words) ✓`
+    );
+  }
+
   return {
     pageId: page.id,
     sections,
@@ -752,12 +806,14 @@ CRITICAL: SERVICE NAME USAGE:
 - Example: Instead of "Why Choose HVAC", write "Why Choose ${serviceName}"
 
 CRITICAL SEO AUDIT REQUIREMENTS:
-- Title/H1: MUST include both service name AND city name (e.g., "${serviceName} in ${context.city}")
+- Title/H1: MUST include both service name AND city name (e.g., "${serviceName} in ${context.city}") - USE PROPER TITLE CASE
 - First 150 words: MUST mention both service and city together
 - Keyword placement: Primary keyword in title, H1, first paragraph, and at least one subheading (H2/H3)
+- Keyword usage: MAXIMUM 4-8 exact matches of the primary keyword across the entire page, plus 10-15 natural variations
+- Keyword density: MAXIMUM 1.0% density (keyword count / total words * 100) - NO keyword stuffing
 - Local signals: Include city name 5+ times and state name 2+ times throughout content
-- Keyword density: Maintain 0.5-2% keyword density (not too sparse, not stuffed)
 - Include service/location variations naturally (e.g., "${context.city}", "${context.state}", nearby areas)
+- Word count: This is a ${page.pageType} page - target ${WORD_LIMITS[page.pageType].min}-${WORD_LIMITS[page.pageType].max} words total
 `;
 
   const styleGuidelines = context.promptProfile?.styleGuidelines || `
@@ -806,7 +862,10 @@ SEO AUDIT REQUIREMENTS (CRITICAL - MUST FOLLOW):
   * FIRST SENTENCE of this section (if this is intro/hero section, this is MANDATORY)
   * First paragraph (if this is intro/hero section, keyword must be in first 50 words)
   * At least one subheading (H2 or H3) if this section has subheadings
-  * Naturally throughout (target 0.5-2% density - not stuffed, not too sparse)
+  * MAXIMUM 4-8 exact matches of "${page.focusKeyword}" across the entire page (NOT per section)
+  * Use 10-15 natural variations (e.g., "${page.focusKeyword.split(' in ')[0] || page.focusKeyword}", "AC repair services", etc.)
+  * Maximum keyword density: 1.0% (keyword count / total words * 100)
+  * DO NOT keyword stuff - natural distribution only
 - Local signals REQUIRED:
   * Mention "${context.city}" at least 3-5 times in this section
   * Mention "${context.state}" at least 1-2 times in this section
@@ -830,7 +889,8 @@ SEO AUDIT REQUIREMENTS (CRITICAL - MUST FOLLOW):
   * Each paragraph should contain at least one city-specific reference
 
 Content Requirements:
-- Use the primary keyword "${page.focusKeyword}" naturally 2-4 times (depending on section length)
+- Use the primary keyword "${page.focusKeyword}" naturally and sparingly (remember: max 4-8 exact matches across entire page)
+- Use natural variations instead of repeating the exact keyword
 - Include local references to ${context.city}, ${context.state} with specific details
 - Write ${skeleton.targetWordCount} words (strictly within 10% tolerance - this is critical)
 - Make it engaging and conversion-focused

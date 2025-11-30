@@ -36,9 +36,12 @@ export interface BrandInfo {
  */
 export function buildHeroSection(section: Section, brand: BrandInfo, focusKeyword?: string): string {
   // Always use focus keyword in H1 if provided
-  const heading = focusKeyword 
+  let heading = focusKeyword 
     ? `${focusKeyword} | ${brand.name}`
     : section.heading || `${brand.name} - ${brand.city}, ${brand.state}`;
+  
+  // Apply title case to H1 for proper capitalization
+  heading = toTitleCase(heading);
   
   return `
 <section class="hero-section">
@@ -554,6 +557,13 @@ function stripLeadingH2FromContent(content: string): string {
 /**
  * Escape HTML to prevent XSS
  */
+/**
+ * Convert string to title case (capitalize first letter of each word)
+ */
+function toTitleCase(str: string): string {
+  return str.replace(/\b\w/g, c => c.toUpperCase());
+}
+
 function escapeHtml(text: string): string {
   const map: { [key: string]: string } = {
     '&': '&amp;',
