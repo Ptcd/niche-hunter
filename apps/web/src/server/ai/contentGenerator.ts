@@ -35,6 +35,57 @@ const WORD_LIMITS: Record<PageType, { min: number; max: number }> = {
   LEGAL: { min: 400, max: 800 },
 };
 
+// Page-type templates with strict section control
+const PAGE_TEMPLATES: Record<PageType, {
+  allowedSections: string[];
+  bannedSections: string[];
+  maxSections: number;
+  requiredSections: string[];
+}> = {
+  HOME: {
+    allowedSections: ['hero', 'intro', 'services', 'why_choose', 'testimonials', 'areas_served', 'faq', 'cta', 'case_study', 'neighborhoods'],
+    bannedSections: ['full_service_detail', 'pricing_table', 'blog_content', 'detailed_process'],
+    maxSections: 8,
+    requiredSections: ['hero', 'intro', 'cta'],
+  },
+  CORE_SERVICE: {
+    allowedSections: ['hero', 'intro', 'process', 'benefits', 'case_study', 'faq', 'cta'],
+    bannedSections: ['areas_served', 'all_services_list', 'neighborhoods'],
+    maxSections: 7,
+    requiredSections: ['hero', 'intro', 'process', 'cta'],
+  },
+  CITY: {
+    allowedSections: ['hero', 'intro', 'areas', 'neighborhoods', 'services', 'faq', 'cta'],
+    bannedSections: ['detailed_process', 'company_history', 'full_service_detail'],
+    maxSections: 7,
+    requiredSections: ['hero', 'areas', 'cta'],
+  },
+  SUPPORT: {
+    allowedSections: ['hero', 'intro', 'details', 'faq', 'cta'],
+    bannedSections: ['areas_served', 'case_study', 'neighborhoods'],
+    maxSections: 5,
+    requiredSections: ['hero', 'intro', 'cta'],
+  },
+  ABOUT: {
+    allowedSections: ['hero', 'story', 'team', 'values', 'cta'],
+    bannedSections: ['services', 'faq', 'areas_served'],
+    maxSections: 5,
+    requiredSections: ['hero', 'story', 'cta'],
+  },
+  CONTACT: {
+    allowedSections: ['hero', 'info', 'hours', 'cta'],
+    bannedSections: ['services', 'faq', 'testimonials'],
+    maxSections: 4,
+    requiredSections: ['hero', 'info', 'cta'],
+  },
+  LEGAL: {
+    allowedSections: ['hero', 'content', 'cta'],
+    bannedSections: ['services', 'testimonials', 'faq'],
+    maxSections: 3,
+    requiredSections: ['hero', 'content'],
+  },
+};
+
 // Section word budget allocation by page type (percentages of total)
 const SECTION_BUDGETS: Record<PageType, Record<string, number>> = {
   HOME: {
@@ -89,6 +140,27 @@ const BANNED_H2_PATTERNS = [
   / services? in /i,                            // "services in City"
   /^(best|top|#1|number one) /i,               // Starts with superlative
 ];
+
+// Enhanced banned patterns (more comprehensive)
+const BANNED_H2_PATTERNS_V2 = [
+  /^(ac repair|hvac|plumbing|roofing|junk)/i,       // Starts with keyword
+  /^why .+ chooses? /i,                              // "Why City chooses..."
+  /^our .+ (services?|solutions?|process)/i,         // "Our X services"
+  /^how our .+ (works?|process)/i,                   // "How Our X Works"
+  / services? in /i,                                 // "services in City"
+  /^(best|top|#1|number one|leading|premier) /i,    // Superlatives
+  /\bac repair\b(?!.*\bAC Repair\b)/i,               // lowercase "ac repair" 
+];
+
+// Heading case corrections for proper capitalization
+const HEADING_CASE_CORRECTIONS: Record<string, string> = {
+  'ac repair': 'AC Repair',
+  'ac service': 'AC Service',
+  'ac installation': 'AC Installation',
+  'ac maintenance': 'AC Maintenance',
+  'hvac': 'HVAC',
+  'a/c': 'A/C',
+};
 
 // Niche-specific variation pools
 const NICHE_VARIATIONS: Record<string, {
@@ -150,9 +222,76 @@ function getNicheVariations(niche: string): {
   return NICHE_VARIATIONS[normalizedNiche] || DEFAULT_NICHE_VARIATIONS;
 }
 
+/**
+ * Get random variations from a pool
+ */
+function getRandomVariations(pool: string[], count: number): string[] {
+  const shuffled = [...pool].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, count);
+}
+
+/**
+ * Build variation injection text for prompts
+ */
+function buildVariationInjection(niche: string, sectionType: string): string {
+  const vars = getNicheVariations(niche);
+  
+  // Pick random subset for this section
+  const serviceVars = getRandomVariations(vars.serviceTerms, 3);
+  const climateVars = getRandomVariations(vars.climateTerms, 2);
+  const painVars = getRandomVariations(vars.painPoints, 2);
+  const benefitVars = getRandomVariations(vars.benefits, 2);
+  
+  return `
+USE THESE SPECIFIC VARIATIONS (randomized for this section):
+- Service terms: ${serviceVars.join(', ')}
+- Pain points: ${painVars.join(', ')}
+- Benefits: ${benefitVars.join(', ')}
+${sectionType === 'intro' ? `- Climate terms (use ONCE only): ${climateVars[0]}` : '- DO NOT mention climate'}
+`;
+}
+
 // Title case function for H1 and page titles
 function toTitleCase(str: string): string {
   return str.replace(/\b\w/g, c => c.toUpperCase());
+}
+
+/**
+ * Fix heading case in H1, H2, H3 tags ONLY (not paragraph text)
+ */
+function fixHeadingCase(html: string, niche: string): string {
+  let result = html;
+  
+  // Fix case in H1, H2, H3 tags ONLY (not paragraph text)
+  result = result.replace(/<(h[1-3])([^>]*)>([^<]+)<\/\1>/gi, (match, tag, attrs, content) => {
+    let fixedContent = content;
+    
+    // Apply case corrections
+    for (const [lower, proper] of Object.entries(HEADING_CASE_CORRECTIONS)) {
+      const regex = new RegExp(`\\b${lower}\\b`, 'gi');
+      fixedContent = fixedContent.replace(regex, proper);
+    }
+    
+    return `<${tag}${attrs}>${fixedContent}</${tag}>`;
+  });
+  
+  return result;
+}
+
+/**
+ * Check if heading is natural (not matching banned patterns)
+ */
+function isHeadingNatural(heading: string, keyword: string): boolean {
+  // Check against all banned patterns
+  for (const pattern of BANNED_H2_PATTERNS_V2) {
+    if (pattern.test(heading)) return false;
+  }
+  
+  // Check if starts with keyword (unnatural)
+  const escapedKw = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (new RegExp(`^${escapedKw}`, 'i').test(heading.trim())) return false;
+  
+  return true;
 }
 
 // Keyword density checker
@@ -580,8 +719,119 @@ function validateContent(
   return { isValid: !hasErrors, violations };
 }
 
+// Unnatural AI phrases to detect and fix
+const UNNATURAL_PATTERNS = [
+  /\b(\w+)\s+\1\b/gi,                          // "fully fully"
+  /\bas a leading\b/gi,                         // "as a leading"
+  /\bwe pride ourselves\b/gi,                   // AI cliche
+  /\blook no further\b/gi,                      // AI cliche
+  /\byour search ends here\b/gi,                // AI cliche
+  /\bwhether you('re| are) looking\b/gi,        // AI opener
+  /\bin today's fast-paced\b/gi,                // AI cliche
+  /\brest assured\b/gi,                         // AI cliche
+  /\bstate-of-the-art\b/gi,                     // Overused
+  /\bsecond to none\b/gi,                       // Cliche
+];
+
 /**
- * Final sanitizer - fix all remaining issues
+ * Check naturalness of content
+ */
+function checkNaturalness(html: string): { score: number; issues: string[] } {
+  const issues: string[] = [];
+  const text = html.replace(/<[^>]+>/g, ' ');
+  
+  for (const pattern of UNNATURAL_PATTERNS) {
+    const matches = text.match(pattern);
+    if (matches) {
+      issues.push(`Found unnatural phrase: "${matches[0]}"`);
+    }
+  }
+  
+  // Check sentence variety
+  const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 10);
+  if (sentences.length > 0) {
+    const avgLength = sentences.reduce((a, s) => a + s.split(/\s+/).length, 0) / sentences.length;
+    if (avgLength < 8 || avgLength > 25) {
+      issues.push(`Sentence length unnatural: avg ${avgLength.toFixed(1)} words`);
+    }
+  }
+  
+  const score = Math.max(0, 100 - (issues.length * 10));
+  return { score, issues };
+}
+
+/**
+ * Fix unnatural phrases in content
+ */
+function fixUnnaturalPhrases(html: string): string {
+  let result = html;
+  
+  // Replace common AI cliches
+  const replacements: [RegExp, string][] = [
+    [/\bwe pride ourselves on\b/gi, 'we focus on'],
+    [/\blook no further\b/gi, 'you\'ve found the right team'],
+    [/\bwhether you('re| are) looking for\b/gi, 'if you need'],
+    [/\bin today's fast-paced world\b/gi, 'today'],
+    [/\brest assured\b/gi, 'you can count on'],
+    [/\bstate-of-the-art\b/gi, 'modern'],
+    [/\bsecond to none\b/gi, 'excellent'],
+  ];
+  
+  for (const [pattern, replacement] of replacements) {
+    result = result.replace(pattern, replacement);
+  }
+  
+  // Fix duplicate words
+  result = result.replace(/\b(\w+)\s+\1\b/gi, '$1');
+  
+  return result;
+}
+
+/**
+ * HTML-safe post-processor - comprehensive fix pipeline
+ */
+function htmlSafePostProcess(
+  html: string,
+  keyword: string,
+  niche: string,
+  variations: string[]
+): { html: string; fixes: string[] } {
+  const fixes: string[] = [];
+  let result = html;
+  
+  // Step 1: Case correction in headings ONLY
+  result = fixHeadingCase(result, niche);
+  fixes.push('Applied heading case corrections');
+  
+  // Step 2: Fix keyword density
+  const densityCheck = checkKeywordDensity(result, keyword, 1.0);
+  if (densityCheck.count > 6) {
+    const { html: fixed, replaced } = replaceExcessKeywords(result, keyword, variations, 5);
+    result = fixed;
+    fixes.push(`Replaced ${replaced} excess keyword occurrences`);
+  }
+  
+  // Step 3: Fix heading rules
+  result = fixHeadingIssues(result, keyword, variations);
+  
+  // Step 4: Fix repetition
+  const repetition = detectRepetition(result);
+  if (repetition.overusedTerms.length > 0) {
+    result = fixRepetition(result, repetition.overusedTerms);
+    fixes.push(`Fixed ${repetition.overusedTerms.length} overused terms`);
+  }
+  
+  // Step 5: Fix duplicate words ("fully fully", "the the")
+  result = result.replace(/\b(\w+)\s+\1\b/gi, '$1');
+  
+  // Step 6: Fix unnatural phrases
+  result = fixUnnaturalPhrases(result);
+  
+  return { html: result, fixes };
+}
+
+/**
+ * Final sanitizer - fix all remaining issues (legacy, kept for compatibility)
  */
 function sanitizeContent(
   html: string,
@@ -590,49 +840,97 @@ function sanitizeContent(
   variations: string[],
   niche: string
 ): { html: string; fixes: string[] } {
-  const fixes: string[] = [];
-  let result = html;
+  const { html: processed, fixes } = htmlSafePostProcess(html, keyword, niche, variations);
   
-  // 1. Fix keyword density (replace excess with variations)
-  const densityCheck = checkKeywordDensity(result, keyword, 1.0);
-  if (densityCheck.count > 6) {
-    const { html: fixed, replaced } = replaceExcessKeywords(result, keyword, variations, 5);
-    if (replaced > 0) {
-      fixes.push(`Replaced ${replaced} excess keyword occurrences`);
-      result = fixed;
-    }
-  }
-  
-  // 2. Fix heading rules
-  result = fixHeadingIssues(result, keyword, variations);
-  const headingCheck = validateHeadings(result, keyword);
-  if (!headingCheck.isValid) {
-    fixes.push(`Fixed heading issues: ${headingCheck.issues.length} issues`);
-  }
-  
-  // 3. Fix repetition
-  const repetition = detectRepetition(result);
-  if (repetition.overusedTerms.length > 0) {
-    result = fixRepetition(result, repetition.overusedTerms);
-    fixes.push(`Fixed ${repetition.overusedTerms.length} overused terms`);
-  }
-  
-  // 4. Trim if over word limit (at paragraph boundary)
+  // Additional trimming if needed
   const limits = WORD_LIMITS[pageType];
-  const wordCount = result.split(/\s+/).length;
+  const wordCount = processed.split(/\s+/).length;
   if (wordCount > limits.max) {
     // Find last </p> before word limit
-    const words = result.split(/\s+/);
+    const words = processed.split(/\s+/);
     let trimPoint = limits.max;
     const partialHtml = words.slice(0, trimPoint).join(' ');
     const lastParagraph = partialHtml.lastIndexOf('</p>');
     if (lastParagraph > partialHtml.length * 0.8) {
-      result = partialHtml.substring(0, lastParagraph + 4); // Include </p>
+      const trimmed = partialHtml.substring(0, lastParagraph + 4); // Include </p>
       fixes.push(`Trimmed from ${wordCount} to ~${limits.max} words at paragraph boundary`);
+      return { html: trimmed, fixes };
     }
   }
   
-  return { html: result, fixes };
+  return { html: processed, fixes };
+}
+
+/**
+ * Quality score interface
+ */
+interface QualityScore {
+  total: number;  // 0-100
+  breakdown: {
+    keywordDensity: number;   // 0-20
+    headingQuality: number;   // 0-20
+    repetition: number;       // 0-20
+    naturalness: number;      // 0-20
+    wordCount: number;        // 0-20
+  };
+  pass: boolean;
+  issues: string[];
+}
+
+/**
+ * Score content quality
+ */
+function scoreContent(
+  html: string,
+  keyword: string,
+  pageType: PageType,
+  variations: string[]
+): QualityScore {
+  const issues: string[] = [];
+  const breakdown = { keywordDensity: 20, headingQuality: 20, repetition: 20, naturalness: 20, wordCount: 20 };
+  
+  // 1. Keyword density (0-20)
+  const density = checkKeywordDensity(html, keyword, 1.0);
+  if (density.density > 1.5) { 
+    breakdown.keywordDensity = 0; 
+    issues.push('Keyword density too high'); 
+  } else if (density.density > 1.0) { 
+    breakdown.keywordDensity = 10; 
+  }
+  
+  // 2. Heading quality (0-20)
+  const headingValidation = validateHeadings(html, keyword);
+  breakdown.headingQuality = headingValidation.isValid ? 20 : Math.max(0, 20 - headingValidation.issues.length * 5);
+  issues.push(...headingValidation.issues);
+  
+  // 3. Repetition (0-20)
+  const repetition = detectRepetition(html);
+  const repPenalty = repetition.duplicateSentences.length * 5 + repetition.overusedTerms.length * 3;
+  breakdown.repetition = Math.max(0, 20 - repPenalty);
+  
+  // 4. Naturalness (0-20)
+  const natural = checkNaturalness(html);
+  breakdown.naturalness = natural.score / 5;
+  issues.push(...natural.issues);
+  
+  // 5. Word count (0-20)
+  const wordCount = html.split(/\s+/).length;
+  const limits = WORD_LIMITS[pageType];
+  if (wordCount < limits.min * 0.8 || wordCount > limits.max * 1.2) {
+    breakdown.wordCount = 0;
+    issues.push(`Word count ${wordCount} outside limits ${limits.min}-${limits.max}`);
+  } else if (wordCount < limits.min || wordCount > limits.max) {
+    breakdown.wordCount = 10;
+  }
+  
+  const total = Object.values(breakdown).reduce((a, b) => a + b, 0);
+  
+  return {
+    total,
+    breakdown,
+    pass: total >= 70,
+    issues,
+  };
 }
 
 /**
@@ -754,6 +1052,87 @@ export interface PageContext {
     systemPrompt: string;
     styleGuidelines: string;
   };
+}
+
+/**
+ * Concept memory tracker to prevent repetition across sections
+ */
+interface ConceptMemory {
+  climateStatementUsed: boolean;
+  energyEfficiencyUsed: boolean;
+  technicianCredentialsUsed: boolean;
+  licensedInsuredUsed: boolean;
+  localExpertsUsed: boolean;
+  qualityServiceUsed: boolean;
+  usedPhrases: string[];  // Track exact phrases used
+}
+
+function createConceptMemory(): ConceptMemory {
+  return {
+    climateStatementUsed: false,
+    energyEfficiencyUsed: false,
+    technicianCredentialsUsed: false,
+    licensedInsuredUsed: false,
+    localExpertsUsed: false,
+    qualityServiceUsed: false,
+    usedPhrases: [],
+  };
+}
+
+function updateConceptMemory(content: string, memory: ConceptMemory): ConceptMemory {
+  const text = content.toLowerCase();
+  
+  if (/hot summers?|humid|humidity|warm weather|florida heat/i.test(text)) {
+    memory.climateStatementUsed = true;
+  }
+  if (/energy efficien|energy star|lower.*bills?|save.*energy/i.test(text)) {
+    memory.energyEfficiencyUsed = true;
+  }
+  if (/certified|trained|qualified|experienced|expert technicians?/i.test(text)) {
+    memory.technicianCredentialsUsed = true;
+  }
+  if (/licensed and insured|fully licensed|bonded/i.test(text)) {
+    memory.licensedInsuredUsed = true;
+  }
+  if (/local experts?|trusted local|your local/i.test(text)) {
+    memory.localExpertsUsed = true;
+  }
+  if (/quality service|exceptional service|top-notch/i.test(text)) {
+    memory.qualityServiceUsed = true;
+  }
+  
+  // Extract 4-word phrases for tracking
+  const words = text.split(/\s+/);
+  for (let i = 0; i < words.length - 3; i++) {
+    const phrase = words.slice(i, i + 4).join(' ');
+    if (phrase.length > 15) memory.usedPhrases.push(phrase);
+  }
+  
+  return memory;
+}
+
+function getConceptAvoidanceRules(memory: ConceptMemory): string {
+  const rules: string[] = [];
+  
+  if (memory.climateStatementUsed) {
+    rules.push('- DO NOT mention climate, weather, humidity, or "hot summers" - already covered');
+  }
+  if (memory.energyEfficiencyUsed) {
+    rules.push('- DO NOT mention energy efficiency, ENERGY STAR, or utility savings - already covered');
+  }
+  if (memory.technicianCredentialsUsed) {
+    rules.push('- DO NOT mention technician certifications or training - already covered');
+  }
+  if (memory.licensedInsuredUsed) {
+    rules.push('- DO NOT mention "licensed and insured" or bonding - already covered');
+  }
+  if (memory.localExpertsUsed) {
+    rules.push('- DO NOT use phrases like "local experts" or "trusted local" - already covered');
+  }
+  
+  return rules.length > 0 
+    ? `\n\nCONCEPTS ALREADY USED (DO NOT REPEAT):\n${rules.join('\n')}`
+    : '';
 }
 
 export interface GeneratedPage {
@@ -895,9 +1274,24 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
   const escapedKeyword = page.focusKeyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const isHomePage = page.pageType === PageType.HOME;
   
+  // MODULE 3: Create concept memory to prevent repetition
+  const conceptMemory = createConceptMemory();
+  
+  // MODULE 1: Get page template
+  const template = PAGE_TEMPLATES[page.pageType];
+  
   if (page.skeletons.length > 0) {
     // Use existing skeletons
     for (const skeleton of page.skeletons) {
+      // MODULE 1: Check template constraints
+      if (sections.length >= template.maxSections) {
+        console.log(`[Template Guard] Max sections reached for ${page.pageType}`);
+        break; // Stop generating more sections
+      }
+      if (template.bannedSections.includes(skeleton.sectionId)) {
+        console.log(`[Template Guard] Skipping banned section: ${skeleton.sectionId}`);
+        continue;
+      }
       // Calculate this section's budget
       const sectionBudget = calculateSectionBudget(
         page.pageType,
@@ -943,8 +1337,12 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
         usedExactKeywords,
         totalWordBudget - usedWords,
         keywordVariations,
-        adjustedKeywordBudget
+        adjustedKeywordBudget,
+        conceptMemory // MODULE 3: Pass concept memory
       );
+      
+      // MODULE 3: Update concept memory after section generation
+      updateConceptMemory(sectionContent, conceptMemory);
       
       // Track usage
       const sectionWordCount = sectionContent.split(/\s+/).length;
@@ -1131,7 +1529,7 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
     }
   } else {
     // Fallback: generate default sections based on page type
-    sections.push(...await generateDefaultSections(page.pageType, context, page, model, externalResources, keywordVariations));
+    sections.push(...await generateDefaultSections(page.pageType, context, page, model, externalResources, keywordVariations, conceptMemory));
   }
 
   // Inject internal links into each section's content
@@ -1298,20 +1696,23 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
     preValidation.violations.forEach(v => console.log(`  - [${v.severity}] ${v.type}: ${v.message}`));
     
     // Step 2: Run sanitizer
-    const { html: sanitizedHtml, fixes } = sanitizeContent(
+    // MODULE 7: Use htmlSafePostProcess instead of sanitizeContent
+    const { html: sanitizedHtml, fixes } = htmlSafePostProcess(
       html, 
       page.focusKeyword, 
-      page.pageType, 
-      keywordVariations,
-      context.niche
+      context.niche,
+      keywordVariations
     );
     html = sanitizedHtml;
     fixes.forEach(fix => console.log(`[Fix] ${fix}`));
     
-    // Step 3: Validate final state
-    const postValidation = validateContent(html, page.focusKeyword, page.pageType, keywordVariations);
-    console.log(`[Post-Validation] ${postValidation.violations.length} issues remaining`);
-    postValidation.violations.forEach(v => console.log(`  - [${v.severity}] ${v.type}: ${v.message}`));
+    // MODULE 9: Quality scoring
+    const score = scoreContent(html, page.focusKeyword, page.pageType, keywordVariations);
+    console.log(`[Quality Score] ${score.total}/100 - ${score.pass ? 'PASS' : 'FAIL'}`);
+    console.log(`[Quality Breakdown] Keyword: ${score.breakdown.keywordDensity}/20, Headings: ${score.breakdown.headingQuality}/20, Repetition: ${score.breakdown.repetition}/20, Naturalness: ${score.breakdown.naturalness}/20, WordCount: ${score.breakdown.wordCount}/20`);
+    if (!score.pass) {
+      console.log(`[Quality Issues] ${score.issues.join(', ')}`);
+    }
   }
 
   // Recalculate final metrics
@@ -1512,7 +1913,8 @@ async function generateSectionContent(
   keywordUsageCount: number = 0,
   remainingWordBudget: number = Infinity,
   keywordVariations: string[] = [],
-  sectionBudget: { maxWords: number; exactKeywords: number } = { maxWords: 300, exactKeywords: 1 }
+  sectionBudget: { maxWords: number; exactKeywords: number } = { maxWords: 300, exactKeywords: 1 },
+  conceptMemory?: ConceptMemory // MODULE 3: Concept memory parameter
 ): Promise<string> {
   // Extract service name from focus keyword (e.g., "ac repair in Wesley Chapel" -> "AC Repair")
   const extractServiceName = (focusKeyword: string): string => {
@@ -1587,8 +1989,39 @@ Location: ${context.city}, ${context.state}
     ? `\n- APPROVED VARIATIONS (use these instead of repeating the exact keyword "${page.focusKeyword}"):\n${keywordVariations.map(v => `  * "${v}"`).join('\n')}`
     : '';
 
+  // MODULE 3: Concept avoidance rules
+  const avoidanceRules = conceptMemory ? getConceptAvoidanceRules(conceptMemory) : '';
+  
+  // MODULE 4: Variation injection
+  const variationInjection = buildVariationInjection(context.niche, skeleton.sectionId);
+  
+  // MODULE 5: Strict word budget prompt
+  const strictWordPrompt = `
+WORD COUNT ENFORCEMENT (CRITICAL):
+- This section MUST be ${sectionBudget.maxWords} words (±10% tolerance)
+- MINIMUM: ${Math.floor(sectionBudget.maxWords * 0.9)} words
+- MAXIMUM: ${Math.ceil(sectionBudget.maxWords * 1.1)} words
+- If you finish your point in fewer words, ADD relevant local details
+- If you're exceeding the limit, STOP and wrap up the point
+- COUNT YOUR WORDS BEFORE SUBMITTING
+`;
+
+  // MODULE 6: Keyword budget prompt
+  const keywordBudgetPrompt = `
+KEYWORD BUDGET FOR THIS SECTION:
+- Primary keyword "${page.focusKeyword}" has been used ${keywordUsageCount} times already
+- You may use it EXACTLY ${sectionBudget.exactKeywords} more time(s)
+- Total page budget is 5-6 exact matches
+- After that, use ONLY these variations: ${keywordVariations.slice(0, 5).join(', ')}
+${keywordUsageCount >= 4 ? '- IMPORTANT: Keyword budget nearly exhausted - USE VARIATIONS ONLY' : ''}
+`;
+
   const userPrompt = `
 Write content for a ${page.pageType} page section.
+
+${strictWordPrompt}
+
+${keywordBudgetPrompt}
 
 STRICT LIMITS (NEVER VIOLATE):
 - Word count: EXACTLY ${sectionBudget.maxWords} words (±10%)
@@ -1600,6 +2033,10 @@ KEYWORD RULES:
 - Already used ${keywordUsageCount} times on this page (max 5 total)
 - ${keywordUsageCount >= 4 ? 'BUDGET EXHAUSTED - use ONLY variations below:' : `You may use exact keyword ${sectionBudget.exactKeywords} time(s)`}
 ${variationsText}
+
+${variationInjection}
+
+${avoidanceRules}
 
 HEADING RULES:
 - NEVER use <h1> tags
@@ -1708,7 +2145,8 @@ async function generateDefaultSections(
   page: { focusKeyword: string; pageType: PageType },
   model: string = 'gpt-4o-mini',
   externalResources: string = '',
-  keywordVariations: string[] = []
+  keywordVariations: string[] = [],
+  conceptMemory?: ConceptMemory
 ): Promise<Section[]> {
   const sections: Section[] = [];
 
