@@ -514,7 +514,7 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
         heading: heading, // Use overridden heading
         content: sectionContent,
         metadata: {
-          targetWordCount: adjustedWordCount,
+          targetWordCount: adjustedKeywordBudget.maxWords,
           styleVariant: skeleton.styleVariant || undefined,
         },
       });
