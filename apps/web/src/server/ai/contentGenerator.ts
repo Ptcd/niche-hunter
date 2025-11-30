@@ -687,6 +687,9 @@ Return simple, visual search terms that will work well on Unsplash.`;
     });
 
     const content = completion.choices[0]?.message?.content;
+    if (!content) {
+      return [];
+    }
 
     const parsed = JSON.parse(content);
     
