@@ -458,6 +458,7 @@ model SitePage {
   aiDraftJson        Json?    // structured sections
   heroImageUrl       String?  // URL to hero/featured image
   heroImageAlt       String?  // SEO alt text for hero image
+  suggestedImageKeywords String[] // AI-suggested image search terms for this page
   latestGenerationAt DateTime?
   latestPublishedAt   DateTime?
   createdAt          DateTime @default(now())

@@ -106,12 +106,31 @@ async function handler(req: NextApiRequest & { auth: any }, res: NextApiResponse
     return res.status(404).json({ error: 'Site or page not found' });
   }
 
-  // Get visual keywords for this niche
-  const suggestedKeywords = getVisualKeywords(site.niche.name);
+  const page = site.pages[0];
+
+  // Get AI-suggested keywords for this specific page (if available)
+  const aiSuggestedKeywords = (page as any).suggestedImageKeywords || [];
+  
+  // Get visual keywords for this niche as fallback
+  const nicheSuggestedKeywords = getVisualKeywords(site.niche.name);
+  
+  // Combine: AI suggestions first, then niche suggestions (deduplicated)
+  const allSuggestions = [...aiSuggestedKeywords];
+  for (const keyword of nicheSuggestedKeywords) {
+    if (!allSuggestions.some(s => s.toLowerCase() === keyword.toLowerCase())) {
+      allSuggestions.push(keyword);
+    }
+  }
+  const suggestedKeywords = allSuggestions.slice(0, 8); // Limit to 8
 
   // If only requesting suggestions, return them
   if (suggestionsOnly === 'true') {
-    return res.status(200).json({ suggestedKeywords, photos: [] });
+    return res.status(200).json({ 
+      suggestedKeywords, 
+      aiSuggestions: aiSuggestedKeywords,
+      nicheSuggestions: nicheSuggestedKeywords,
+      photos: [] 
+    });
   }
 
   // Use provided query or first suggested keyword

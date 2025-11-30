@@ -48,7 +48,8 @@ export default function ImagePicker({
   const [selectedPhotos, setSelectedPhotos] = useState<UnsplashPhoto[]>([]);
   const [saving, setSaving] = useState(false);
   const [customAltText, setCustomAltText] = useState('');
-  const [suggestedKeywords, setSuggestedKeywords] = useState<string[]>([]);
+  const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
+  const [nicheSuggestions, setNicheSuggestions] = useState<string[]>([]);
 
   // Fetch suggested keywords and initial search on mount
   useEffect(() => {
@@ -60,13 +61,14 @@ export default function ImagePicker({
         );
         if (res.ok) {
           const data = await res.json();
-          const suggestions = data.suggestedKeywords || [];
-          setSuggestedKeywords(suggestions);
+          setAiSuggestions(data.aiSuggestions || []);
+          setNicheSuggestions(data.nicheSuggestions || []);
           
-          // Auto-search with first suggestion
-          if (suggestions.length > 0) {
-            setSearchQuery(suggestions[0]);
-            handleSearch(suggestions[0]);
+          // Auto-search with first AI suggestion, or first niche suggestion
+          const firstSuggestion = (data.aiSuggestions || [])[0] || (data.nicheSuggestions || [])[0];
+          if (firstSuggestion) {
+            setSearchQuery(firstSuggestion);
+            handleSearch(firstSuggestion);
           }
         }
       } catch (error) {
@@ -202,16 +204,48 @@ export default function ImagePicker({
           </button>
         </div>
 
-        {/* Suggested Keywords */}
-        {suggestedKeywords.length > 0 && (
+        {/* AI Suggested Keywords */}
+        {aiSuggestions.length > 0 && (
           <div style={{ marginBottom: '1rem' }}>
-            <div style={{ fontSize: '0.875rem', color: '#666', marginBottom: '0.5rem' }}>
-              Suggested searches:
+            <div style={{ fontSize: '0.875rem', color: '#0070f3', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+              ✨ AI Recommended for this page:
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-              {suggestedKeywords.map((keyword, index) => (
+              {aiSuggestions.map((keyword, index) => (
                 <button
-                  key={index}
+                  key={`ai-${index}`}
+                  onClick={() => {
+                    setSearchQuery(keyword);
+                    handleSearch(keyword);
+                  }}
+                  style={{
+                    padding: '0.375rem 0.75rem',
+                    backgroundColor: searchQuery === keyword ? '#0070f3' : '#e8f4fd',
+                    color: searchQuery === keyword ? 'white' : '#0070f3',
+                    border: searchQuery === keyword ? 'none' : '1px solid #0070f3',
+                    borderRadius: '20px',
+                    cursor: 'pointer',
+                    fontSize: '0.875rem',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  {keyword}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Niche Keywords */}
+        {nicheSuggestions.length > 0 && (
+          <div style={{ marginBottom: '1rem' }}>
+            <div style={{ fontSize: '0.875rem', color: '#666', marginBottom: '0.5rem' }}>
+              More suggestions:
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+              {nicheSuggestions.map((keyword, index) => (
+                <button
+                  key={`niche-${index}`}
                   onClick={() => {
                     setSearchQuery(keyword);
                     handleSearch(keyword);

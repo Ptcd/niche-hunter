@@ -367,12 +367,23 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
     model
   );
 
-  // Update page with SEO meta
+  // Generate AI image suggestions for this page
+  const suggestedImageKeywords = await generateImageSuggestions(
+    page.focusKeyword,
+    page.pageType,
+    context.niche,
+    context.city,
+    context.state,
+    model
+  );
+
+  // Update page with SEO meta and image suggestions
   await prisma.sitePage.update({
     where: { id: pageId },
     data: {
       titleTag: seoMeta.title,
       seoDescription: seoMeta.description,
+      suggestedImageKeywords,
     },
   });
 
@@ -573,6 +584,82 @@ Output format (JSON only, no markdown):
     const fallbackTitle = `${focusKeyword} | ${brandName}`.substring(0, 60);
     const fallbackDesc = `${focusKeyword} services in ${city}, ${state}. Professional service by ${brandName}. Call today for a free quote!`.substring(0, 160);
     return { title: fallbackTitle, description: fallbackDesc };
+  }
+}
+
+/**
+ * Generate AI image search suggestions for a page
+ */
+async function generateImageSuggestions(
+  focusKeyword: string,
+  pageType: PageType,
+  niche: string,
+  city: string,
+  state: string,
+  model: string = 'gpt-4o-mini'
+): Promise<string[]> {
+  const systemPrompt = `You are an expert at suggesting stock photo search terms.
+Given a page topic and location, suggest 4-6 simple, visual search terms that will return great stock photos from Unsplash.
+
+RULES:
+- Use simple, visual terms (2-4 words max)
+- Focus on the action or visual element, not the location
+- Don't use long-tail SEO keywords
+- Don't include city/state names
+- Think about what photos would look good on a service business website
+
+Good examples:
+- "HVAC technician working"
+- "air conditioner unit"
+- "plumber fixing pipe"
+- "professional handyman"
+- "home renovation"
+
+Bad examples (too specific/long):
+- "AC repair service in Wesley Chapel Florida"
+- "best plumber near me"
+- "affordable HVAC installation services"
+
+Return ONLY a JSON array of strings, no other text.`;
+
+  const userPrompt = `Suggest 4-6 stock photo search terms for a ${niche} business page about "${focusKeyword}" in ${city}, ${state}.
+
+Page type: ${pageType}
+
+Return simple, visual search terms that will work well on Unsplash.`;
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model,
+      temperature: 0.7,
+      max_tokens: 200,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt.trim() },
+      ],
+      response_format: { type: 'json_object' },
+    });
+
+    const content = completion.choices[0]?.message?.content;
+    if (!content) {
+      return [];
+    }
+
+    const parsed = JSON.parse(content);
+    
+    // Handle both array and object with keywords property
+    const suggestions = Array.isArray(parsed) 
+      ? parsed 
+      : parsed.keywords || parsed.suggestions || parsed.searchTerms || [];
+
+    // Filter and limit
+    return suggestions
+      .filter((s: any) => typeof s === 'string' && s.length > 0 && s.length < 50)
+      .slice(0, 6);
+  } catch (error: any) {
+    console.error(`[generateImageSuggestions] Error:`, error);
+    // Return empty array on error - niche-based defaults will be used as fallback
+    return [];
   }
 }
 
