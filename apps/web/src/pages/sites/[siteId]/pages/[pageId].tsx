@@ -31,7 +31,7 @@ export default function PageEditor() {
   const [regenerating, setRegenerating] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [useCustomHtml, setUseCustomHtml] = useState(false);
-  const [selectedModel, setSelectedModel] = useState('gpt-5-mini');
+  const [selectedModel, setSelectedModel] = useState('gpt-4o-mini');
   const [lastModelUsed, setLastModelUsed] = useState<string | null>(null);
   
   // Form state
@@ -294,9 +294,9 @@ export default function PageEditor() {
                 borderRadius: '4px',
               }}
             >
-              <option value="gpt-5">GPT-5 (Best quality)</option>
-              <option value="gpt-5-mini">GPT-5-mini (Recommended)</option>
-              <option value="gpt-5-nano">GPT-5-nano (Fastest, cheapest)</option>
+              <option value="gpt-4o">GPT-4o (Best quality)</option>
+              <option value="gpt-4o-mini">GPT-4o-mini (Recommended)</option>
+              <option value="gpt-4-turbo">GPT-4 Turbo (Alternative)</option>
             </select>
             {lastModelUsed && (
               <div style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: '#666' }}>
