@@ -38,7 +38,7 @@ export async function chatWithFallback(
   const model = options.model;
   
   console.log(`[OpenAI] Calling model: ${model}`);
-  console.log(`[OpenAI] Max tokens: ${options.max_tokens}`);
+  console.log(`[OpenAI] Max tokens: ${options.max_completion_tokens}`);
   
   try {
     const result = await openai.chat.completions.create({
