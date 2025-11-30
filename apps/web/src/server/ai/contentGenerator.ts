@@ -81,6 +81,75 @@ const KEYWORD_BUDGETS: Record<string, { exact: number; variations: number }> = {
   default: { exact: 0, variations: 2 },
 };
 
+// Banned heading patterns (regex) - these indicate unnatural AI headings
+const BANNED_H2_PATTERNS = [
+  /^(ac repair|hvac|plumbing|roofing|junk)/i,  // Starts with service keyword
+  /^why .+ chooses? /i,                         // "Why City chooses service"
+  /^our .+ (services?|solutions?)/i,            // "Our HVAC services"
+  / services? in /i,                            // "services in City"
+  /^(best|top|#1|number one) /i,               // Starts with superlative
+];
+
+// Niche-specific variation pools
+const NICHE_VARIATIONS: Record<string, {
+  serviceTerms: string[];
+  climateTerms: string[];
+  painPoints: string[];
+  benefits: string[];
+}> = {
+  hvac: {
+    serviceTerms: ['AC repair', 'air conditioning service', 'cooling system repair', 'HVAC maintenance', 'AC tune-up'],
+    climateTerms: ['hot summers', 'warm seasons', 'high temperatures', 'summer heat', 'humid conditions'],
+    painPoints: ['uneven cooling', 'strange noises', 'weak airflow', 'rising energy bills', 'frequent cycling'],
+    benefits: ['energy savings', 'improved comfort', 'cleaner air', 'reliable cooling', 'lower utility costs'],
+  },
+  plumbing: {
+    serviceTerms: ['plumbing repair', 'pipe services', 'drain cleaning', 'leak repair', 'water heater service'],
+    climateTerms: ['hard water', 'mineral buildup', 'seasonal changes', 'freezing temps', 'water pressure issues'],
+    painPoints: ['slow drains', 'leaky faucets', 'low water pressure', 'water damage', 'clogged pipes'],
+    benefits: ['water savings', 'prevent damage', 'improved flow', 'reliable plumbing', 'peace of mind'],
+  },
+  roofing: {
+    serviceTerms: ['roof repair', 'roofing services', 'shingle replacement', 'roof inspection', 'leak repair'],
+    climateTerms: ['storm damage', 'heavy rain', 'wind damage', 'sun exposure', 'hurricane season'],
+    painPoints: ['leaks', 'missing shingles', 'sagging', 'water stains', 'energy loss'],
+    benefits: ['home protection', 'curb appeal', 'energy efficiency', 'peace of mind', 'increased value'],
+  },
+  'junk-removal': {
+    serviceTerms: ['junk hauling', 'debris removal', 'cleanout services', 'furniture removal', 'estate cleanouts'],
+    climateTerms: ['spring cleaning', 'moving season', 'renovation projects', 'downsizing', 'estate sales'],
+    painPoints: ['cluttered space', 'heavy items', 'time constraints', 'disposal hassle', 'limited access'],
+    benefits: ['reclaim space', 'stress-free', 'eco-friendly disposal', 'same-day service', 'competitive pricing'],
+  },
+  electrical: {
+    serviceTerms: ['electrical repair', 'wiring services', 'panel upgrades', 'outlet installation', 'lighting repair'],
+    climateTerms: ['power surges', 'storm outages', 'high demand', 'summer load', 'generator needs'],
+    painPoints: ['flickering lights', 'tripping breakers', 'outdated wiring', 'safety concerns', 'power outages'],
+    benefits: ['safety', 'code compliance', 'energy savings', 'reliable power', 'modern convenience'],
+  },
+};
+
+// Default variations for unknown niches
+const DEFAULT_NICHE_VARIATIONS = {
+  serviceTerms: ['professional service', 'expert solutions', 'quality work', 'reliable service', 'trusted solutions'],
+  climateTerms: ['local conditions', 'seasonal needs', 'area requirements', 'regional factors', 'environmental factors'],
+  painPoints: ['common issues', 'typical problems', 'frequent concerns', 'ongoing challenges', 'recurring needs'],
+  benefits: ['quality results', 'peace of mind', 'professional work', 'reliable solutions', 'customer satisfaction'],
+};
+
+/**
+ * Get variation pools for a specific niche
+ */
+function getNicheVariations(niche: string): {
+  serviceTerms: string[];
+  climateTerms: string[];
+  painPoints: string[];
+  benefits: string[];
+} {
+  const normalizedNiche = niche.toLowerCase().replace(/\s+/g, '-');
+  return NICHE_VARIATIONS[normalizedNiche] || DEFAULT_NICHE_VARIATIONS;
+}
+
 // Title case function for H1 and page titles
 function toTitleCase(str: string): string {
   return str.replace(/\b\w/g, c => c.toUpperCase());
@@ -197,6 +266,376 @@ function enforceHeadingRules(
 }
 
 /**
+ * Detect repeated phrases and sentences in content
+ */
+function detectRepetition(html: string): {
+  duplicateSentences: string[];
+  repeatedPhrases: { phrase: string; count: number }[];
+  overusedTerms: { term: string; count: number }[];
+} {
+  // Extract text content only (no HTML tags)
+  const textContent = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  
+  // 1. Find duplicate sentences
+  const sentences = textContent.split(/[.!?]+/).map(s => s.trim().toLowerCase()).filter(s => s.length > 20);
+  const sentenceCounts: Record<string, number> = {};
+  sentences.forEach(s => { sentenceCounts[s] = (sentenceCounts[s] || 0) + 1; });
+  const duplicateSentences = Object.entries(sentenceCounts)
+    .filter(([_, count]) => count > 1)
+    .map(([sentence]) => sentence);
+  
+  // 2. Find repeated 3-4 word phrases (appearing 3+ times)
+  const words = textContent.toLowerCase().split(/\s+/);
+  const phraseCounts: Record<string, number> = {};
+  for (let i = 0; i < words.length - 3; i++) {
+    const phrase3 = words.slice(i, i + 3).join(' ');
+    const phrase4 = words.slice(i, i + 4).join(' ');
+    phraseCounts[phrase3] = (phraseCounts[phrase3] || 0) + 1;
+    phraseCounts[phrase4] = (phraseCounts[phrase4] || 0) + 1;
+  }
+  const repeatedPhrases = Object.entries(phraseCounts)
+    .filter(([phrase, count]) => count >= 3 && phrase.length > 10)
+    .map(([phrase, count]) => ({ phrase, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10);
+  
+  // 3. Find overused filler terms
+  const fillerTerms = [
+    'hot summers', 'high humidity', 'humid climate', 'warm weather',
+    'qualified technicians', 'experienced professionals', 'quality service',
+    'energy efficient', 'cost effective', 'reliable service',
+    'licensed and insured', 'local experts', 'trusted professionals'
+  ];
+  const overusedTerms: { term: string; count: number }[] = [];
+  fillerTerms.forEach(term => {
+    const regex = new RegExp(term, 'gi');
+    const matches = textContent.match(regex);
+    if (matches && matches.length > 1) {
+      overusedTerms.push({ term, count: matches.length });
+    }
+  });
+  
+  return { duplicateSentences, repeatedPhrases, overusedTerms };
+}
+
+/**
+ * Fix repetition by replacing overused terms with variations
+ */
+function fixRepetition(
+  html: string,
+  overusedTerms: { term: string; count: number }[]
+): string {
+  // Variation mappings for common overused terms
+  const variationMap: Record<string, string[]> = {
+    'hot summers': ['warm seasons', 'summer heat', 'high temperatures'],
+    'high humidity': ['humid conditions', 'moisture levels', 'damp climate'],
+    'humid climate': ['tropical weather', 'moisture-rich air', 'warm atmosphere'],
+    'qualified technicians': ['skilled specialists', 'trained experts', 'certified pros'],
+    'experienced professionals': ['seasoned experts', 'industry veterans', 'knowledgeable team'],
+    'quality service': ['excellent work', 'superior results', 'top-notch service'],
+    'energy efficient': ['cost-saving', 'eco-friendly', 'power-efficient'],
+    'licensed and insured': ['fully certified', 'bonded and licensed', 'properly credentialed'],
+  };
+  
+  let result = html;
+  
+  overusedTerms.forEach(({ term, count }) => {
+    if (count <= 1) return;
+    
+    const variations = variationMap[term.toLowerCase()];
+    if (!variations || variations.length === 0) return;
+    
+    // Keep first occurrence, replace subsequent ones
+    let occurrenceCount = 0;
+    const escapedTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`(>[^<]*)(${escapedTerm})([^<]*<)`, 'gi');
+    result = result.replace(regex, (match, before, kw, after) => {
+      occurrenceCount++;
+      if (occurrenceCount === 1) return match; // Keep first
+      const variation = variations[(occurrenceCount - 2) % variations.length];
+      return `${before}${variation}${after}`;
+    });
+  });
+  
+  return result;
+}
+
+/**
+ * Validate headings against banned patterns
+ */
+function validateHeadings(
+  html: string,
+  keyword: string
+): { isValid: boolean; issues: string[] } {
+  const issues: string[] = [];
+  const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  
+  // Check H2s
+  const h2Regex = /<h2[^>]*>([^<]+)<\/h2>/gi;
+  let h2Match;
+  let h2ExactCount = 0;
+  
+  while ((h2Match = h2Regex.exec(html)) !== null) {
+    const h2Content = h2Match[1];
+    
+    // Check if H2 contains exact keyword
+    if (new RegExp(escapedKeyword, 'i').test(h2Content)) {
+      h2ExactCount++;
+      if (h2ExactCount > 1) {
+        issues.push(`H2 "${h2Content.substring(0, 30)}..." contains exact keyword (only 1 allowed)`);
+      }
+    }
+    
+    // Check against banned patterns
+    for (const pattern of BANNED_H2_PATTERNS) {
+      if (pattern.test(h2Content)) {
+        issues.push(`H2 "${h2Content.substring(0, 30)}..." matches banned pattern: ${pattern}`);
+        break;
+      }
+    }
+    
+    // Check if H2 starts with keyword (unnatural)
+    if (new RegExp(`^${escapedKeyword}`, 'i').test(h2Content.trim())) {
+      issues.push(`H2 "${h2Content.substring(0, 30)}..." starts with keyword (unnatural)`);
+    }
+  }
+  
+  // Check H3s - should never contain exact keyword
+  const h3Regex = /<h3[^>]*>([^<]+)<\/h3>/gi;
+  let h3Match;
+  
+  while ((h3Match = h3Regex.exec(html)) !== null) {
+    const h3Content = h3Match[1];
+    
+    if (new RegExp(escapedKeyword, 'i').test(h3Content)) {
+      issues.push(`H3 "${h3Content.substring(0, 30)}..." contains exact keyword (should use variation)`);
+    }
+  }
+  
+  return { isValid: issues.length === 0, issues };
+}
+
+/**
+ * Fix heading issues by replacing keyword with variations
+ */
+function fixHeadingIssues(
+  html: string,
+  keyword: string,
+  variations: string[]
+): string {
+  if (variations.length === 0) return html;
+  
+  const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  let result = html;
+  let h2ExactCount = 0;
+  
+  // Fix H2s - keep only first exact keyword occurrence
+  result = result.replace(/<h2([^>]*)>([^<]+)<\/h2>/gi, (match, attrs, content) => {
+    if (new RegExp(escapedKeyword, 'i').test(content)) {
+      h2ExactCount++;
+      if (h2ExactCount > 1) {
+        // Replace keyword with variation
+        const newContent = content.replace(new RegExp(escapedKeyword, 'gi'), variations[0]);
+        return `<h2${attrs}>${newContent}</h2>`;
+      }
+    }
+    return match;
+  });
+  
+  // Fix H3s - replace ALL exact keywords with variations
+  result = result.replace(/<h3([^>]*)>([^<]+)<\/h3>/gi, (match, attrs, content) => {
+    if (new RegExp(escapedKeyword, 'i').test(content)) {
+      const newContent = content.replace(
+        new RegExp(escapedKeyword, 'gi'), 
+        variations[1] || variations[0]
+      );
+      return `<h3${attrs}>${newContent}</h3>`;
+    }
+    return match;
+  });
+  
+  return result;
+}
+
+/**
+ * Comprehensive content validation
+ */
+function validateContent(
+  html: string,
+  keyword: string,
+  pageType: PageType,
+  variations: string[]
+): {
+  isValid: boolean;
+  violations: {
+    type: 'keyword_density' | 'word_count' | 'heading_rules' | 'repetition' | 'html_structure';
+    message: string;
+    severity: 'error' | 'warning';
+  }[];
+} {
+  const violations: any[] = [];
+  const limits = WORD_LIMITS[pageType];
+  
+  // 1. Check word count
+  const wordCount = html.split(/\s+/).length;
+  if (wordCount < limits.min) {
+    violations.push({
+      type: 'word_count',
+      message: `Word count ${wordCount} below minimum ${limits.min}`,
+      severity: 'warning',
+    });
+  }
+  if (wordCount > limits.max * 1.1) { // 10% tolerance
+    violations.push({
+      type: 'word_count',
+      message: `Word count ${wordCount} exceeds maximum ${limits.max}`,
+      severity: 'error',
+    });
+  }
+  
+  // 2. Check keyword density
+  const densityCheck = checkKeywordDensity(html, keyword, 1.0);
+  if (!densityCheck.isValid) {
+    violations.push({
+      type: 'keyword_density',
+      message: `Density ${densityCheck.density}% exceeds 1% (${densityCheck.count} occurrences)`,
+      severity: 'error',
+    });
+  }
+  if (densityCheck.count > 8) {
+    violations.push({
+      type: 'keyword_density',
+      message: `Exact keyword appears ${densityCheck.count} times (max 8)`,
+      severity: 'error',
+    });
+  }
+  if (densityCheck.count < 3) {
+    violations.push({
+      type: 'keyword_density',
+      message: `Exact keyword appears only ${densityCheck.count} times (min 3-4)`,
+      severity: 'warning',
+    });
+  }
+  
+  // 3. Check heading rules
+  const headingValidation = validateHeadings(html, keyword);
+  if (!headingValidation.isValid) {
+    headingValidation.issues.forEach(issue => {
+      violations.push({
+        type: 'heading_rules',
+        message: issue,
+        severity: 'warning',
+      });
+    });
+  }
+  
+  // 4. Check H1 exists and contains keyword
+  const h1Match = html.match(/<h1[^>]*>([^<]+)<\/h1>/i);
+  if (!h1Match) {
+    violations.push({
+      type: 'heading_rules',
+      message: 'Missing H1 tag',
+      severity: 'error',
+    });
+  } else {
+    const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (!new RegExp(escapedKeyword, 'i').test(h1Match[1])) {
+      violations.push({
+        type: 'heading_rules',
+        message: 'H1 does not contain primary keyword',
+        severity: 'error',
+      });
+    }
+  }
+  
+  // 5. Check repetition
+  const repetition = detectRepetition(html);
+  if (repetition.duplicateSentences.length > 0) {
+    violations.push({
+      type: 'repetition',
+      message: `${repetition.duplicateSentences.length} duplicate sentence(s) found`,
+      severity: 'warning',
+    });
+  }
+  if (repetition.overusedTerms.length > 0) {
+    violations.push({
+      type: 'repetition',
+      message: `Overused terms: ${repetition.overusedTerms.map(t => `"${t.term}" (${t.count}x)`).join(', ')}`,
+      severity: 'warning',
+    });
+  }
+  
+  // 6. Check HTML structure
+  const openTags = (html.match(/<[a-z][a-z0-9]*[^>]*>/gi) || []).length;
+  const closeTags = (html.match(/<\/[a-z][a-z0-9]*>/gi) || []).length;
+  if (Math.abs(openTags - closeTags) > 5) { // Some tolerance for self-closing tags
+    violations.push({
+      type: 'html_structure',
+      message: `Possible broken HTML: ${openTags} open tags, ${closeTags} close tags`,
+      severity: 'warning',
+    });
+  }
+  
+  const hasErrors = violations.some(v => v.severity === 'error');
+  return { isValid: !hasErrors, violations };
+}
+
+/**
+ * Final sanitizer - fix all remaining issues
+ */
+function sanitizeContent(
+  html: string,
+  keyword: string,
+  pageType: PageType,
+  variations: string[],
+  niche: string
+): { html: string; fixes: string[] } {
+  const fixes: string[] = [];
+  let result = html;
+  
+  // 1. Fix keyword density (replace excess with variations)
+  const densityCheck = checkKeywordDensity(result, keyword, 1.0);
+  if (densityCheck.count > 6) {
+    const { html: fixed, replaced } = replaceExcessKeywords(result, keyword, variations, 5);
+    if (replaced > 0) {
+      fixes.push(`Replaced ${replaced} excess keyword occurrences`);
+      result = fixed;
+    }
+  }
+  
+  // 2. Fix heading rules
+  result = fixHeadingIssues(result, keyword, variations);
+  const headingCheck = validateHeadings(result, keyword);
+  if (!headingCheck.isValid) {
+    fixes.push(`Fixed heading issues: ${headingCheck.issues.length} issues`);
+  }
+  
+  // 3. Fix repetition
+  const repetition = detectRepetition(result);
+  if (repetition.overusedTerms.length > 0) {
+    result = fixRepetition(result, repetition.overusedTerms);
+    fixes.push(`Fixed ${repetition.overusedTerms.length} overused terms`);
+  }
+  
+  // 4. Trim if over word limit (at paragraph boundary)
+  const limits = WORD_LIMITS[pageType];
+  const wordCount = result.split(/\s+/).length;
+  if (wordCount > limits.max) {
+    // Find last </p> before word limit
+    const words = result.split(/\s+/);
+    let trimPoint = limits.max;
+    const partialHtml = words.slice(0, trimPoint).join(' ');
+    const lastParagraph = partialHtml.lastIndexOf('</p>');
+    if (lastParagraph > partialHtml.length * 0.8) {
+      result = partialHtml.substring(0, lastParagraph + 4); // Include </p>
+      fixes.push(`Trimmed from ${wordCount} to ~${limits.max} words at paragraph boundary`);
+    }
+  }
+  
+  return { html: result, fixes };
+}
+
+/**
  * Generate keyword variations to prevent keyword stuffing
  * Returns 8-10 natural variations of the focus keyword
  */
@@ -218,16 +657,21 @@ async function generateKeywordVariations(
         },
         {
           role: 'user',
-          content: `Generate 8 natural variations of "${focusKeyword}" for a ${niche} business in ${city}, ${state}.
+          content: (() => {
+            const nicheVars = getNicheVariations(niche);
+            return `Generate 8 natural variations of "${focusKeyword}" for a ${niche} business in ${city}, ${state}.
 
 Include:
-- Service-only (no location): e.g., "AC repair services"
-- Location-only: e.g., "${city} AC services"  
-- Professional versions: e.g., "professional AC repair"
-- Generic versions: e.g., "repair services", "our technicians"
+- Service-only (no location): e.g., "${nicheVars.serviceTerms[0]}"
+- Location-only: e.g., "${city} ${nicheVars.serviceTerms[1]}"  
+- Professional versions: e.g., "professional ${nicheVars.serviceTerms[2]}"
+- Generic versions: e.g., "our technicians", "local experts"
+
+Available service terms for this niche: ${nicheVars.serviceTerms.join(', ')}
 
 Return JSON object with "variations" array of strings only, no markdown:
-{"variations": ["variation 1", "variation 2", ...]}`
+{"variations": ["variation 1", "variation 2", ...]}`;
+          })()
         }
       ],
       response_format: { type: 'json_object' }
@@ -841,57 +1285,36 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
     return `<img${before} alt="${altText}"${after}>`;
   });
 
-  // Calculate word count
+  // Calculate initial word count
   let wordCount = html.split(/\s+/).length;
-  const limits = WORD_LIMITS[page.pageType];
 
-  // Trim HTML if it exceeds max word count
-  if (wordCount > limits.max) {
-    const words = html.split(/\s+/);
-    const trimmedWords = words.slice(0, limits.max);
-    // Try to end at a sentence boundary
-    let trimmedHtml = trimmedWords.join(' ');
-    const lastPeriod = trimmedHtml.lastIndexOf('.');
-    if (lastPeriod > trimmedHtml.length * 0.9) {
-      trimmedHtml = trimmedHtml.substring(0, lastPeriod + 1);
-    }
-    html = trimmedHtml;
-    wordCount = html.split(/\s+/).length;
-    console.warn(
-      `[Content Quality] Trimmed page from ${words.length} to ${wordCount} words (limit: ${limits.max})`
-    );
-  }
-
-  // Validate word count limits
-  if (wordCount < limits.min || wordCount > limits.max) {
-    console.warn(
-      `[Content Quality] Word count ${wordCount} is outside limits for ${page.pageType} (${limits.min}-${limits.max})`
-    );
-  } else {
-    console.log(
-      `[Content Quality] Word count ${wordCount} is within limits for ${page.pageType} (${limits.min}-${limits.max}) ✓`
-    );
-  }
-
-  // POST-PROCESSING: Safety net
+  // COMPLETE POST-PROCESSING PIPELINE
   if (keywordVariations.length > 0) {
-    // 1. Replace excess keywords
-    const { html: deStuffedHtml, replaced } = replaceExcessKeywords(
+    console.log('[Post-Process] Starting sanitization pipeline...');
+    
+    // Step 1: Validate current state
+    const preValidation = validateContent(html, page.focusKeyword, page.pageType, keywordVariations);
+    console.log(`[Pre-Validation] ${preValidation.violations.length} issues found`);
+    preValidation.violations.forEach(v => console.log(`  - [${v.severity}] ${v.type}: ${v.message}`));
+    
+    // Step 2: Run sanitizer
+    const { html: sanitizedHtml, fixes } = sanitizeContent(
       html, 
       page.focusKeyword, 
-      keywordVariations, 
-      5
+      page.pageType, 
+      keywordVariations,
+      context.niche
     );
-    if (replaced > 0) {
-      console.log(`[Post-Process] Replaced ${replaced} excess keyword occurrences`);
-      html = deStuffedHtml;
-    }
+    html = sanitizedHtml;
+    fixes.forEach(fix => console.log(`[Fix] ${fix}`));
     
-    // 2. Enforce heading rules
-    html = enforceHeadingRules(html, page.focusKeyword, keywordVariations);
+    // Step 3: Validate final state
+    const postValidation = validateContent(html, page.focusKeyword, page.pageType, keywordVariations);
+    console.log(`[Post-Validation] ${postValidation.violations.length} issues remaining`);
+    postValidation.violations.forEach(v => console.log(`  - [${v.severity}] ${v.type}: ${v.message}`));
   }
 
-  // Recalculate metrics after post-processing
+  // Recalculate final metrics
   wordCount = html.split(/\s+/).length;
   const finalDensity = checkKeywordDensity(html, page.focusKeyword, 1.0);
   console.log(`[Final] Words: ${wordCount}, Density: ${finalDensity.density}%, Exact matches: ${finalDensity.count}`);
@@ -1107,26 +1530,38 @@ async function generateSectionContent(
   const nicheSlug = context.niche.toLowerCase();
   
   const systemPrompt = context.promptProfile?.systemPrompt || `
-You are an expert local SEO copywriter for home-service businesses.
-Write engaging, conversion-focused content that builds trust and drives action.
-Always write in clear, friendly, professional US English.
-Output clean HTML content (paragraphs, lists, headings) - no markdown, no code blocks.
+You are an expert local SEO copywriter. You MUST follow these rules EXACTLY:
 
-CRITICAL: SERVICE NAME USAGE:
-- The service being offered is "${serviceName}" - USE THIS in headings and content
-- NEVER use the generic term "${nicheSlug}" or "HVAC" in headings - use "${serviceName}" instead
-- Example: Instead of "Our HVAC Services", write "Our ${serviceName} Services"
-- Example: Instead of "Why Choose HVAC", write "Why Choose ${serviceName}"
+RULE 1 - KEYWORD USAGE:
+- Use primary keyword EXACTLY ${sectionBudget.exactKeywords} time(s) in this section
+- Use variations for all additional mentions
+- NEVER force the keyword unnaturally
 
-CRITICAL SEO AUDIT REQUIREMENTS:
-- Title/H1: MUST include both service name AND city name (e.g., "${serviceName} in ${context.city}") - USE PROPER TITLE CASE
-- First 150 words: MUST mention both service and city together
-- Keyword placement: Primary keyword in title, H1, first paragraph, and at least one subheading (H2/H3)
-- Keyword usage: MAXIMUM 4-8 exact matches of the primary keyword across the entire page, plus 10-15 natural variations
-- Keyword density: MAXIMUM 1.0% density (keyword count / total words * 100) - NO keyword stuffing
-- Local signals: Include city name 5+ times and state name 2+ times throughout content
-- Include service/location variations naturally (e.g., "${context.city}", "${context.state}", nearby areas)
-- Word count: This is a ${page.pageType} page - target ${WORD_LIMITS[page.pageType].min}-${WORD_LIMITS[page.pageType].max} words total
+RULE 2 - HEADINGS:
+- NEVER use <h1> tags
+- H2s must be natural English, not keyword-first
+- H2s may contain keyword OR variation (max 1 exact)
+- H3s can ONLY use variations, NEVER exact keyword
+
+RULE 3 - WORD COUNT:
+- Write EXACTLY ${sectionBudget.maxWords} words (±10%)
+- If you complete your point early, STOP
+- Do NOT pad with filler content
+
+RULE 4 - NO REPETITION:
+- Do NOT reuse phrases from other sections
+- Do NOT repeat climate descriptions ("hot summers", "humid")
+- Each section must have unique angle
+
+RULE 5 - UNIQUENESS:
+- Make content 100% unique to ${context.city}
+- Use real neighborhood names
+- Include local landmarks/details
+
+I ACKNOWLEDGE THESE RULES AND WILL FOLLOW THEM EXACTLY.
+
+Service: ${serviceName}
+Location: ${context.city}, ${context.state}
 `;
 
   const styleGuidelines = context.promptProfile?.styleGuidelines || `
