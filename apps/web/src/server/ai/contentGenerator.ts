@@ -21,6 +21,46 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+// Model fallback configuration
+const MODEL_FALLBACKS: Record<string, string[]> = {
+  'gpt-5': ['gpt-5', 'gpt-4o'],
+  'gpt-5-mini': ['gpt-5-mini', 'gpt-4o-mini'],
+  'gpt-5-nano': ['gpt-5-nano', 'gpt-4o-mini'],
+};
+
+// Helper to make API call with fallback
+async function callWithFallback(
+  createOptions: Omit<OpenAI.Chat.ChatCompletionCreateParams, 'model'> & { model: string }
+): Promise<OpenAI.Chat.ChatCompletion> {
+  const models = MODEL_FALLBACKS[createOptions.model] || [createOptions.model];
+  let lastError: Error | null = null;
+  
+  for (const model of models) {
+    try {
+      console.log(`[GPT] Trying model: ${model}`);
+      const result = await openai.chat.completions.create({
+        ...createOptions,
+        model,
+      });
+      
+      // Check if we got actual content
+      const content = result.choices[0]?.message?.content;
+      if (content && content.trim().length > 0) {
+        console.log(`[GPT] Success with model: ${model}`);
+        return result;
+      }
+      
+      console.warn(`[GPT] Model ${model} returned empty content, trying fallback...`);
+      lastError = new Error(`Model ${model} returned empty content`);
+    } catch (error: any) {
+      console.warn(`[GPT] Model ${model} failed: ${error.message}, trying fallback...`);
+      lastError = error;
+    }
+  }
+  
+  throw lastError || new Error('All models failed');
+}
+
 export interface PageContext {
   siteId: string;
   siteName: string;
@@ -503,7 +543,7 @@ async function generateSEOMeta(
   brandName: string,
   city: string,
   state: string,
-  model: string = 'gpt-5-nano'
+  model: string = 'gpt-5-mini'
 ): Promise<{ title: string; description: string }> {
   const systemPrompt = `
 You are an expert SEO copywriter specializing in local business optimization.
@@ -538,9 +578,9 @@ Output format (JSON only, no markdown):
 `;
 
   try {
-    const completion = await openai.chat.completions.create({
+    const completion = await callWithFallback({
       model,
-      max_completion_tokens: 200,
+      max_tokens: 200,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt.trim() },
@@ -548,10 +588,7 @@ Output format (JSON only, no markdown):
       response_format: { type: 'json_object' },
     });
 
-    const content = completion.choices[0]?.message?.content;
-    if (!content) {
-      throw new Error('GPT returned empty content');
-    }
+    const content = completion.choices[0]?.message?.content!;
 
     const parsed = JSON.parse(content);
     let title = parsed.title || `${focusKeyword} | ${brandName}`;
@@ -595,7 +632,7 @@ async function generateImageSuggestions(
   niche: string,
   city: string,
   state: string,
-  model: string = 'gpt-5-nano'
+  model: string = 'gpt-5-mini'
 ): Promise<string[]> {
   const systemPrompt = `You are an expert at suggesting stock photo search terms.
 Given a page topic and location, suggest 4-6 simple, visual search terms that will return great stock photos from Unsplash.
@@ -628,9 +665,9 @@ Page type: ${pageType}
 Return simple, visual search terms that will work well on Unsplash.`;
 
   try {
-    const completion = await openai.chat.completions.create({
+    const completion = await callWithFallback({
       model,
-      max_completion_tokens: 200,
+      max_tokens: 200,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt.trim() },
@@ -639,9 +676,6 @@ Return simple, visual search terms that will work well on Unsplash.`;
     });
 
     const content = completion.choices[0]?.message?.content;
-    if (!content) {
-      return [];
-    }
 
     const parsed = JSON.parse(content);
     
@@ -806,19 +840,16 @@ Output ONLY the HTML content text (no markdown, no code blocks, no backticks). D
 `;
 
   try {
-    const completion = await openai.chat.completions.create({
+    const completion = await callWithFallback({
       model,
-      max_completion_tokens: Math.ceil(skeleton.targetWordCount * 1.5), // Rough estimate
+      max_tokens: Math.ceil(skeleton.targetWordCount * 1.5), // Rough estimate
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt.trim() },
       ],
     });
 
-    const content = completion.choices[0]?.message?.content;
-    if (!content) {
-      throw new Error('GPT returned empty content');
-    }
+    const content = completion.choices[0]?.message?.content!;
 
     // Post-process to replace any remaining niche slug usage in headings
     let processedContent = content.trim();

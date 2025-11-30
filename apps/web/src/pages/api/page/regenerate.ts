@@ -6,12 +6,8 @@
 
 import type { NextApiRequest, NextApiResponse } from "next";
 import { prisma } from "@niche-hunter/db";
-import OpenAI from "openai";
 import { buildBrandSpec } from "../../../lib/brandBuilder";
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+import { chatWithFallback } from "../../../lib/openaiHelpers";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
@@ -97,8 +93,8 @@ Include phone links with tel:${brand.phoneClean}.
 Output ONLY the HTML content, no JSON, no markdown, no backticks.
 `;
 
-    // Call OpenAI
-    const completion = await openai.chat.completions.create({
+    // Call OpenAI with fallback
+    const completion = await chatWithFallback({
       model: "gpt-5-nano",
       messages: [
         { role: "system", content: systemPrompt },

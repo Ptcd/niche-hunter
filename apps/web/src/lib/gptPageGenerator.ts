@@ -5,12 +5,8 @@
  * Supports Site Factory workflow with PromptProfile integration.
  */
 
-import OpenAI from "openai";
 import type { PageSpec, BrandSpec } from "./wpFactoryTypes";
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+import { chatWithFallback } from "./openaiHelpers";
 
 type GenerateParams = {
   siteId: string;
@@ -85,7 +81,7 @@ Output ONLY a JSON array of page objects with fields:
 "type", "slug", "title", "content", "seoTitle", "seoDescription", "focusKeyword".
 `;
 
-  const completion = await openai.chat.completions.create({
+  const completion = await chatWithFallback({
     model: "gpt-5-nano",
     messages: [
       { role: "system", content: systemPrompt },

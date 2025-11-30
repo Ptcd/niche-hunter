@@ -7,11 +7,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { withAuth } from '../../../../../lib/auth/withAuth';
 import { prisma } from '@niche-hunter/db';
-import OpenAI from 'openai';
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+import { chatWithFallback } from '../../../../../lib/openaiHelpers';
 
 export interface LogoConcept {
   name: string;
@@ -79,7 +75,7 @@ Return ONLY a valid JSON object with this exact structure:
   ]
 }`;
 
-    const completion = await openai.chat.completions.create({
+    const completion = await chatWithFallback({
       model: 'gpt-5-nano',
       messages: [
         { role: 'system', content: systemPrompt },
