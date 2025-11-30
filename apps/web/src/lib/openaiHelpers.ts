@@ -44,6 +44,7 @@ export async function chatWithFallback(
     const result = await openai.chat.completions.create({
       ...options,
       model,
+      stream: false,
     });
     
     console.log(`[OpenAI] Response from ${model}`);

@@ -42,6 +42,7 @@ async function callWithFallback(
     const result = await openai.chat.completions.create({
       ...createOptions,
       model,
+      stream: false,
     });
     
     console.log(`[GPT] Response received from ${model}`);
