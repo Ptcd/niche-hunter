@@ -1,7 +1,7 @@
 /**
  * Content Generator Module
  * 
- * Generates page content section-by-section using gpt-4o and existing data.
+ * Generates page content section-by-section using gpt-5-mini and existing data.
  * Uses ContentSkeleton templates and PromptProfile for tone/style.
  */
 
@@ -52,7 +52,7 @@ export interface GeneratedPage {
 /**
  * Generate content for a single page
  */
-export async function generatePageContent(pageId: string, model: string = 'gpt-4o'): Promise<GeneratedPage> {
+export async function generatePageContent(pageId: string, model: string = 'gpt-5-mini'): Promise<GeneratedPage> {
   const page = await prisma.sitePage.findUnique({
     where: { id: pageId },
     include: {
@@ -503,7 +503,7 @@ async function generateSEOMeta(
   brandName: string,
   city: string,
   state: string,
-  model: string = 'gpt-4o'
+  model: string = 'gpt-5-nano'
 ): Promise<{ title: string; description: string }> {
   const systemPrompt = `
 You are an expert SEO copywriter specializing in local business optimization.
@@ -596,7 +596,7 @@ async function generateImageSuggestions(
   niche: string,
   city: string,
   state: string,
-  model: string = 'gpt-4o-mini'
+  model: string = 'gpt-5-nano'
 ): Promise<string[]> {
   const systemPrompt = `You are an expert at suggesting stock photo search terms.
 Given a page topic and location, suggest 4-6 simple, visual search terms that will return great stock photos from Unsplash.
@@ -679,7 +679,7 @@ async function generateSectionContent(
   },
   context: PageContext,
   page: { focusKeyword: string; pageType: PageType; supportingKeywords?: string[] },
-  model: string = 'gpt-4o',
+  model: string = 'gpt-5-mini',
   externalResources: string = ''
 ): Promise<string> {
   // Extract service name from focus keyword (e.g., "ac repair in Wesley Chapel" -> "AC Repair")
@@ -873,7 +873,7 @@ async function generateDefaultSections(
   pageType: PageType,
   context: PageContext,
   page: { focusKeyword: string; pageType: PageType },
-  model: string = 'gpt-4o',
+  model: string = 'gpt-5-mini',
   externalResources: string = ''
 ): Promise<Section[]> {
   const sections: Section[] = [];

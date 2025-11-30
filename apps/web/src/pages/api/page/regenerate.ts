@@ -99,7 +99,7 @@ Output ONLY the HTML content, no JSON, no markdown, no backticks.
 
     // Call OpenAI
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-5-nano",
       temperature: 0.5,
       messages: [
         { role: "system", content: systemPrompt },
