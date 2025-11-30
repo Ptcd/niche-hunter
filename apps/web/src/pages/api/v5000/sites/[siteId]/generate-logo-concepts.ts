@@ -85,7 +85,6 @@ Return ONLY a valid JSON object with this exact structure:
         { role: 'system', content: systemPrompt },
         { role: 'user', content: `Generate logo concepts for ${site.niche.name} in ${site.city}, ${site.state}` },
       ],
-      temperature: 0.8,
       response_format: { type: 'json_object' },
     });
 

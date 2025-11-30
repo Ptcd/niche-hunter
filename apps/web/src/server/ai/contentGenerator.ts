@@ -540,7 +540,6 @@ Output format (JSON only, no markdown):
   try {
     const completion = await openai.chat.completions.create({
       model,
-      temperature: 0.7,
       max_completion_tokens: 200,
       messages: [
         { role: 'system', content: systemPrompt },
@@ -631,7 +630,6 @@ Return simple, visual search terms that will work well on Unsplash.`;
   try {
     const completion = await openai.chat.completions.create({
       model,
-      temperature: 0.7,
       max_completion_tokens: 200,
       messages: [
         { role: 'system', content: systemPrompt },
@@ -810,7 +808,6 @@ Output ONLY the HTML content text (no markdown, no code blocks, no backticks). D
   try {
     const completion = await openai.chat.completions.create({
       model,
-      temperature: 0.7,
       max_completion_tokens: Math.ceil(skeleton.targetWordCount * 1.5), // Rough estimate
       messages: [
         { role: 'system', content: systemPrompt },
