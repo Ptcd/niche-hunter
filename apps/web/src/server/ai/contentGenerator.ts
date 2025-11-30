@@ -154,12 +154,17 @@ const BANNED_H2_PATTERNS_V2 = [
 
 // Heading case corrections for proper capitalization
 const HEADING_CASE_CORRECTIONS: Record<string, string> = {
+  // HVAC
   'ac repair': 'AC Repair',
   'ac service': 'AC Service',
   'ac installation': 'AC Installation',
   'ac maintenance': 'AC Maintenance',
+  'ac tune-up': 'AC Tune-Up',
+  'ac unit': 'AC Unit',
   'hvac': 'HVAC',
   'a/c': 'A/C',
+  // Capitalize first letter patterns for any "Xx Xxxxx" -> "XX Xxxxx"
+  'ac ': 'AC ',
 };
 
 // Natural heading alternatives for different section types
@@ -441,9 +446,12 @@ function fixHeadingCase(html: string, niche: string): string {
     
     // Apply case corrections
     for (const [lower, proper] of Object.entries(HEADING_CASE_CORRECTIONS)) {
-      const regex = new RegExp(`\\b${lower}\\b`, 'gi');
+      const regex = new RegExp(`\\b${lower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
       fixedContent = fixedContent.replace(regex, proper);
     }
+    
+    // Special case: Fix "Ac " at word boundaries -> "AC "
+    fixedContent = fixedContent.replace(/\bAc\s+/gi, 'AC ');
     
     return `<${tag}${attrs}>${fixedContent}</${tag}>`;
   });
@@ -788,6 +796,163 @@ function fixRepetition(
 }
 
 /**
+ * Remove duplicate sentences from content
+ * Keeps the first occurrence, removes subsequent ones
+ */
+function removeDuplicateSentences(html: string): { html: string; removed: number } {
+  let removed = 0;
+  
+  // First, remove duplicate paragraphs (simpler and more effective)
+  const paragraphs = html.match(/<p[^>]*>[\s\S]*?<\/p>/gi) || [];
+  const seenParagraphs = new Set<string>();
+  const uniqueParagraphs: string[] = [];
+  
+  for (const p of paragraphs) {
+    const text = p.replace(/<[^>]+>/g, '').toLowerCase().trim().replace(/\s+/g, ' ');
+    if (text.length < 20) {
+      uniqueParagraphs.push(p);
+      continue;
+    }
+    
+    if (seenParagraphs.has(text)) {
+      removed++;
+      continue; // Skip duplicate paragraph
+    }
+    
+    seenParagraphs.add(text);
+    uniqueParagraphs.push(p);
+  }
+  
+  // Rebuild HTML with unique paragraphs
+  let result = html;
+  for (const p of paragraphs) {
+    const text = p.replace(/<[^>]+>/g, '').toLowerCase().trim().replace(/\s+/g, ' ');
+    if (text.length >= 20 && seenParagraphs.has(text)) {
+      // Check if this is a duplicate (not the first occurrence)
+      const firstIndex = uniqueParagraphs.findIndex(up => {
+        const upText = up.replace(/<[^>]+>/g, '').toLowerCase().trim().replace(/\s+/g, ' ');
+        return upText === text;
+      });
+      const currentIndex = paragraphs.indexOf(p);
+      if (currentIndex > firstIndex) {
+        result = result.replace(p, '');
+      }
+    }
+  }
+  
+  // Also check for duplicate sentences within remaining paragraphs
+  const remainingParagraphs = result.match(/<p[^>]*>[\s\S]*?<\/p>/gi) || [];
+  for (const p of remainingParagraphs) {
+    const textContent = p.replace(/<[^>]+>/g, ' ');
+    const sentences = textContent.split(/(?<=[.!?])\s+/).filter(s => s.trim().length >= 20);
+    const seenSentences = new Set<string>();
+    const uniqueSentences: string[] = [];
+    
+    for (const sentence of sentences) {
+      const normalized = sentence.toLowerCase().trim().replace(/\s+/g, ' ');
+      if (seenSentences.has(normalized)) {
+        removed++;
+        continue;
+      }
+      seenSentences.add(normalized);
+      uniqueSentences.push(sentence);
+    }
+    
+    // If sentences were removed, rebuild paragraph
+    if (sentences.length !== uniqueSentences.length) {
+      const newParagraph = p.replace(textContent, uniqueSentences.join(' '));
+      result = result.replace(p, newParagraph);
+    }
+  }
+  
+  return { html: result, removed };
+}
+
+/**
+ * Rotate neighborhoods to prevent repetition
+ * Replaces excess occurrences of any neighborhood with other neighborhoods from the list
+ */
+function rotateNeighborhoods(
+  html: string,
+  neighborhoods: string[],
+  maxPerNeighborhood: number = 2
+): { html: string; rotations: number } {
+  if (neighborhoods.length < 2) return { html, rotations: 0 };
+  
+  let rotations = 0;
+  const counts: Record<string, number> = {};
+  let neighborhoodIndex = 0;
+  
+  // For each neighborhood, track occurrences and rotate if > max
+  for (const neighborhood of neighborhoods) {
+    const escaped = neighborhood.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`\\b${escaped}\\b`, 'gi');
+    let count = 0;
+    
+    html = html.replace(regex, (match) => {
+      counts[neighborhood] = (counts[neighborhood] || 0) + 1;
+      count++;
+      
+      if (count > maxPerNeighborhood) {
+        // Find a replacement neighborhood that hasn't been overused
+        for (let i = 0; i < neighborhoods.length; i++) {
+          const idx = (neighborhoodIndex + i) % neighborhoods.length;
+          const replacement = neighborhoods[idx];
+          if ((counts[replacement] || 0) < maxPerNeighborhood && replacement !== neighborhood) {
+            counts[replacement] = (counts[replacement] || 0) + 1;
+            neighborhoodIndex = (idx + 1) % neighborhoods.length;
+            rotations++;
+            return replacement;
+          }
+        }
+      }
+      return match;
+    });
+  }
+  
+  return { html, rotations };
+}
+
+/**
+ * Enforce exact keyword count: minimum 3, maximum 6
+ * Removes excess or adds keyword if too few
+ */
+function enforceKeywordCount(
+  html: string,
+  keyword: string,
+  variations: string[],
+  minCount: number = 3,
+  maxCount: number = 6
+): { html: string; adjustments: string[] } {
+  const adjustments: string[] = [];
+  const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(escapedKeyword, 'gi');
+  
+  // Count current occurrences
+  const matches = html.match(regex) || [];
+  let currentCount = matches.length;
+  
+  // If too many, replace excess with variations
+  if (currentCount > maxCount && variations.length > 0) {
+    let replacedCount = 0;
+    html = html.replace(new RegExp(`(>[^<]*)(${escapedKeyword})([^<]*<)`, 'gi'), (match, before, kw, after) => {
+      if (replacedCount >= currentCount - maxCount) return match;
+      replacedCount++;
+      const variation = variations[replacedCount % variations.length];
+      return `${before}${variation}${after}`;
+    });
+    adjustments.push(`Replaced ${replacedCount} excess keywords with variations`);
+  }
+  
+  // If too few, we log it (can't easily add without breaking HTML)
+  if (currentCount < minCount) {
+    adjustments.push(`Warning: Only ${currentCount} keyword occurrences (min ${minCount})`);
+  }
+  
+  return { html, adjustments };
+}
+
+/**
  * Validate headings against banned patterns
  */
 function validateHeadings(
@@ -1083,7 +1248,8 @@ function htmlSafePostProcess(
   keyword: string,
   niche: string,
   variations: string[],
-  city: string = '' // Add city parameter
+  city: string = '',
+  neighborhoods: string[] = []  // NEW PARAMETER
 ): { html: string; fixes: string[] } {
   const fixes: string[] = [];
   let result = html;
@@ -1132,6 +1298,27 @@ function htmlSafePostProcess(
   // Step 6: Fix unnatural phrases
   result = fixUnnaturalPhrases(result);
   
+  // Step 7: Remove duplicate sentences
+  const { html: deduped, removed: dupesRemoved } = removeDuplicateSentences(result);
+  if (dupesRemoved > 0) {
+    result = deduped;
+    fixes.push(`Removed ${dupesRemoved} duplicate sentence(s)`);
+  }
+  
+  // Step 8: Rotate neighborhoods
+  if (neighborhoods.length > 1) {
+    const { html: rotated, rotations } = rotateNeighborhoods(result, neighborhoods, 2);
+    if (rotations > 0) {
+      result = rotated;
+      fixes.push(`Rotated ${rotations} neighborhood mention(s)`);
+    }
+  }
+  
+  // Step 9: Enforce keyword count (3-6 exact matches)
+  const { html: keywordFixed, adjustments } = enforceKeywordCount(result, keyword, variations, 3, 6);
+  result = keywordFixed;
+  adjustments.forEach(a => fixes.push(a));
+  
   return { html: result, fixes };
 }
 
@@ -1146,7 +1333,7 @@ function sanitizeContent(
   niche: string,
   city: string = '' // Add city parameter
 ): { html: string; fixes: string[] } {
-  const { html: processed, fixes } = htmlSafePostProcess(html, keyword, niche, variations, city);
+  const { html: processed, fixes } = htmlSafePostProcess(html, keyword, niche, variations, city, []);
   
   // Additional trimming if needed
   const limits = WORD_LIMITS[pageType];
@@ -2176,7 +2363,8 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
       page.focusKeyword, 
       context.niche,
       allVariations, // Use merged variations
-      context.city // Pass city for heading rewrites
+      context.city, // Pass city for heading rewrites
+      context.enrichedData?.neighborhoods || []  // NEW: Pass neighborhoods
     );
     html = sanitizedHtml;
     fixes.forEach(fix => console.log(`[Fix] ${fix}`));
