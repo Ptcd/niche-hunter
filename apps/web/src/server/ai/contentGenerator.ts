@@ -802,70 +802,36 @@ function fixRepetition(
 function removeDuplicateSentences(html: string): { html: string; removed: number } {
   let removed = 0;
   
-  // First, remove duplicate paragraphs (simpler and more effective)
-  const paragraphs = html.match(/<p[^>]*>[\s\S]*?<\/p>/gi) || [];
-  const seenParagraphs = new Set<string>();
-  const uniqueParagraphs: string[] = [];
+  // Remove duplicate paragraphs (simpler and more effective)
+  const paragraphMatch = html.match(/<p[^>]*>[\s\S]*?<\/p>/gi);
+  if (!paragraphMatch) {
+    return { html, removed: 0 };
+  }
   
-  for (const p of paragraphs) {
+  const paragraphs: string[] = paragraphMatch;
+  const seenParagraphs = new Set<string>();
+  const paragraphMap = new Map<string, number>(); // Track first occurrence index
+  
+  // First pass: identify duplicates
+  for (let i = 0; i < paragraphs.length; i++) {
+    const p = paragraphs[i];
     const text = p.replace(/<[^>]+>/g, '').toLowerCase().trim().replace(/\s+/g, ' ');
+    
     if (text.length < 20) {
-      uniqueParagraphs.push(p);
-      continue;
+      continue; // Skip short paragraphs
     }
     
     if (seenParagraphs.has(text)) {
       removed++;
-      continue; // Skip duplicate paragraph
-    }
-    
-    seenParagraphs.add(text);
-    uniqueParagraphs.push(p);
-  }
-  
-  // Rebuild HTML with unique paragraphs
-  let result = html;
-  for (const p of paragraphs) {
-    const text = p.replace(/<[^>]+>/g, '').toLowerCase().trim().replace(/\s+/g, ' ');
-    if (text.length >= 20 && seenParagraphs.has(text)) {
-      // Check if this is a duplicate (not the first occurrence)
-      const firstIndex = uniqueParagraphs.findIndex(up => {
-        const upText = up.replace(/<[^>]+>/g, '').toLowerCase().trim().replace(/\s+/g, ' ');
-        return upText === text;
-      });
-      const currentIndex = paragraphs.indexOf(p);
-      if (currentIndex > firstIndex) {
-        result = result.replace(p, '');
-      }
+      // Remove duplicate paragraph from HTML
+      html = html.replace(p, '');
+    } else {
+      seenParagraphs.add(text);
+      paragraphMap.set(text, i);
     }
   }
   
-  // Also check for duplicate sentences within remaining paragraphs
-  const remainingParagraphs = result.match(/<p[^>]*>[\s\S]*?<\/p>/gi) || [];
-  for (const p of remainingParagraphs) {
-    const textContent = p.replace(/<[^>]+>/g, ' ');
-    const sentences = textContent.split(/(?<=[.!?])\s+/).filter(s => s.trim().length >= 20);
-    const seenSentences = new Set<string>();
-    const uniqueSentences: string[] = [];
-    
-    for (const sentence of sentences) {
-      const normalized = sentence.toLowerCase().trim().replace(/\s+/g, ' ');
-      if (seenSentences.has(normalized)) {
-        removed++;
-        continue;
-      }
-      seenSentences.add(normalized);
-      uniqueSentences.push(sentence);
-    }
-    
-    // If sentences were removed, rebuild paragraph
-    if (sentences.length !== uniqueSentences.length) {
-      const newParagraph = p.replace(textContent, uniqueSentences.join(' '));
-      result = result.replace(p, newParagraph);
-    }
-  }
-  
-  return { html: result, removed };
+  return { html, removed };
 }
 
 /**
