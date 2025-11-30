@@ -677,7 +677,7 @@ async function generateSectionContent(
   },
   context: PageContext,
   page: { focusKeyword: string; pageType: PageType; supportingKeywords?: string[] },
-  model: string = 'gpt-5-nano',
+  model: string = 'gpt-5-mini',
   externalResources: string = ''
 ): Promise<string> {
   // Extract service name from focus keyword (e.g., "ac repair in Wesley Chapel" -> "AC Repair")
@@ -870,7 +870,7 @@ async function generateDefaultSections(
   pageType: PageType,
   context: PageContext,
   page: { focusKeyword: string; pageType: PageType },
-  model: string = 'gpt-5-nano',
+  model: string = 'gpt-5-mini',
   externalResources: string = ''
 ): Promise<Section[]> {
   const sections: Section[] = [];
