@@ -444,6 +444,10 @@ function fixHeadingCase(html: string, niche: string): string {
   result = result.replace(/<(h[1-3])([^>]*)>([^<]+)<\/\1>/gi, (match, tag, attrs, content) => {
     let fixedContent = content;
     
+    // Fix "Ac" followed by capital letter (e.g., "Ac Repair" -> "AC Repair")
+    fixedContent = fixedContent.replace(/\bAc([A-Z])/g, 'AC$1');
+    fixedContent = fixedContent.replace(/\bAc\s+([A-Z])/gi, 'AC $1');
+    
     // Apply case corrections
     for (const [lower, proper] of Object.entries(HEADING_CASE_CORRECTIONS)) {
       const regex = new RegExp(`\\b${lower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
@@ -1273,7 +1277,7 @@ function htmlSafePostProcess(
   
   // Step 8: Rotate neighborhoods
   if (neighborhoods.length > 1) {
-    const { html: rotated, rotations } = rotateNeighborhoods(result, neighborhoods, 2);
+    const { html: rotated, rotations } = rotateNeighborhoods(result, neighborhoods, 1);
     if (rotations > 0) {
       result = rotated;
       fixes.push(`Rotated ${rotations} neighborhood mention(s)`);
@@ -2159,9 +2163,37 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
     sections.push(...await generateDefaultSections(page.pageType, context, page, model, externalResources, allVariations, conceptMemory, siteServices));
   }
 
+  // Deduplicate sections by ID (keep first occurrence)
+  const seenIds = new Set<string>();
+  sections = sections.filter(section => {
+    const normalizedId = section.id.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (seenIds.has(normalizedId)) {
+      console.log(`[Dedup] Removing duplicate section: ${section.id}`);
+      return false;
+    }
+    seenIds.add(normalizedId);
+    return true;
+  });
+
+  // Deduplicate sections with similar headings
+  const seenHeadings = new Set<string>();
+  sections = sections.filter(section => {
+    if (!section.heading) return true;
+    const normalizedHeading = section.heading.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (seenHeadings.has(normalizedHeading)) {
+      console.log(`[Dedup] Removing duplicate heading: ${section.heading}`);
+      return false;
+    }
+    seenHeadings.add(normalizedHeading);
+    return true;
+  });
+
   // Inject internal links into each section's content
   for (const section of sections) {
-    if (section.content && section.type !== 'hero' && section.type !== 'cta-block') {
+    if (section.content && 
+        section.type !== 'hero' && 
+        section.type !== 'cta-block' &&
+        section.type !== 'testimonials') {  // NEW: Skip testimonials
       section.content = injectInternalLinks(
         section.content,
         pageLinks,
@@ -2682,10 +2714,11 @@ ${styleGuidelines}
 ${externalResourcesText}
 
 LOCAL SIGNALS REQUIRED:
-- Mention "${context.city}" at least 3-5 times in this section
-- Mention "${context.state}" at least 1-2 times in this section
-${context.enrichedData?.neighborhoods?.length ? `- USE THESE REAL NEIGHBORHOODS: ${context.enrichedData.neighborhoods.slice(0, 6).join(', ')}` : `- Include specific neighborhood names in ${context.city}`}
+- Mention "${context.city}" 1-2 times in this section
+- Mention "${context.state}" 0-1 times in this section
+${context.enrichedData?.neighborhoods?.length ? `- Mention ONE neighborhood from this list: ${context.enrichedData.neighborhoods.slice(0, 3).join(', ')}` : `- Include specific neighborhood names in ${context.city}`}
 ${context.enrichedData?.landmarks?.length ? `- REFERENCE THESE LANDMARKS: ${context.enrichedData.landmarks.slice(0, 4).join(', ')}` : '- Reference local landmarks or well-known areas'}
+- DO NOT list multiple neighborhoods in a single paragraph
 - Make content 100% unique to ${context.city}
 
 ${context.enrichedData?.painPoints?.length ? `CUSTOMER PAIN POINTS TO ADDRESS:\n${context.enrichedData.painPoints.map(p => `- ${p}`).join('\n')}` : ''}

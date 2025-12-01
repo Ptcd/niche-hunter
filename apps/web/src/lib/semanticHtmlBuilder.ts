@@ -47,12 +47,12 @@ export function buildHeroSection(section: Section, brand: BrandInfo, focusKeywor
 <section class="hero-section">
   <h1 class="page-title">${escapeHtml(heading)}</h1>
   <div class="hero-content">
-    <div class="hero-text">
-      ${section.content}
-    </div>
     <div class="hero-cta">
       <a href="tel:${brand.phoneClean}" class="cta-button cta-primary">Call ${brand.phonePretty}</a>
       <a href="#contact" class="cta-button cta-secondary">Get Free Quote</a>
+    </div>
+    <div class="hero-text">
+      ${section.content}
     </div>
     <div class="hero-phone-text">
       <p>Call us now at <strong>${escapeHtml(brand.phonePretty)}</strong> for immediate service!</p>
