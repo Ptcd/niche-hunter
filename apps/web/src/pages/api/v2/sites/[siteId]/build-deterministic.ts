@@ -52,7 +52,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (publishMode !== 'skip' && site.wpApiBase && site.wpUser && site.wpAppPassword) {
       try {
         const { publishFromArtifacts } = await import('@niche-hunter/deterministic-generator');
-        const { publishPages } = await import('../../../lib/wpFactoryClient');
+        const { publishPages } = await import('@/lib/wpFactoryClient');
         
         // Create publish function adapter
         const publishFn = async (
