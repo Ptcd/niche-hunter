@@ -254,8 +254,8 @@ export async function generateSiteDeterministic(
 
   console.log(`[Orchestrator] Generation complete. Validation: ${finalValidation.pass ? 'PASS' : 'FAIL'}`);
   console.log(`[Orchestrator] Pages generated: ${pagesGenerated.length}`);
-  console.log(`[Orchestrator] Hard failures: ${allHardFailures.length}`);
-  console.log(`[Orchestrator] Warnings: ${allWarnings.length}`);
+  console.log(`[Orchestrator] Hard failures: ${finalValidation.hard_failures.length}`);
+  console.log(`[Orchestrator] Warnings: ${finalValidation.warnings.length}`);
 
   return manifest;
 }
