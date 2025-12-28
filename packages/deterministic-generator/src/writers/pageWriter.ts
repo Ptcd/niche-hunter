@@ -17,10 +17,44 @@ export interface PageWriterConfig {
 }
 
 /**
+ * Format phone number for display in content
+ * Converts +18134999891 to (813) 499-9891
+ */
+function formatPhoneForDisplay(phone: string): string {
+  // Remove all non-digit characters except + at the start
+  let digits = phone.replace(/[^\d+]/g, '');
+  
+  // Handle international format: +1XXXXXXXXXX
+  if (digits.startsWith('+1') && digits.length === 12) {
+    const areaCode = digits.slice(2, 5);
+    const firstPart = digits.slice(5, 8);
+    const secondPart = digits.slice(8, 12);
+    return `(${areaCode}) ${firstPart}-${secondPart}`;
+  }
+  
+  // Handle US format without +: 1XXXXXXXXXX or XXXXXXXXXX
+  if (digits.length === 11 && digits.startsWith('1')) {
+    digits = digits.slice(1); // Remove leading 1
+  }
+  
+  // Handle 10-digit US format: XXXXXXXXXX
+  if (digits.length === 10) {
+    const areaCode = digits.slice(0, 3);
+    const firstPart = digits.slice(3, 6);
+    const secondPart = digits.slice(6, 10);
+    return `(${areaCode}) ${firstPart}-${secondPart}`;
+  }
+  
+  // If already formatted or doesn't match expected patterns, return as-is
+  return phone;
+}
+
+/**
  * Build prompt for a page based on page type
  */
 function buildPagePrompt(payload: PagePayload, config: PageWriterConfig): string {
   const { page_type, primary_keyword, semantic_keywords, business_name, cta_phone, state } = payload;
+  const formattedPhone = formatPhoneForDisplay(cta_phone);
   const wordTarget = getWordCountTarget(page_type as any);
   const keywordRule = getKeywordPlacementRule(page_type as any);
   const reviewRule = getReviewRule(page_type as any);
@@ -102,7 +136,7 @@ OUTPUT:
 6. Areas We Serve (list all city pages)
 7. Local Context (include landmarks if provided)
 8. Customer Review (if required)
-9. Call to Action (include phone: ${cta_phone})
+9. Call to Action (include phone: ${formattedPhone})
 `;
   } else if (page_type === 'service') {
     prompt += `REQUIRED STRUCTURE:
@@ -113,7 +147,7 @@ OUTPUT:
 5. Local Experience & Area Coverage (include landmarks if provided)
 6. Customer Reviews (if required)
 7. FAQs
-8. Call to Action (include phone: ${cta_phone})
+8. Call to Action (include phone: ${formattedPhone})
 `;
   } else if (page_type === 'city') {
     prompt += `REQUIRED STRUCTURE:
@@ -123,7 +157,7 @@ OUTPUT:
 4. What to Expect
 5. Local Area Context (include exactly 1 landmark)
 6. Reviews (if required)
-7. Call to Action (include phone: ${cta_phone})
+7. Call to Action (include phone: ${formattedPhone})
 `;
   } else if (page_type === 'blog_index') {
     prompt += `REQUIRED STRUCTURE:
@@ -138,7 +172,7 @@ OUTPUT:
 2. Introduction
 3. Main content (3-5 paragraphs)
 4. Conclusion
-5. Call to Action (include phone: ${cta_phone})
+5. Call to Action (include phone: ${formattedPhone})
 6. Must include links to service page and contact page
 `;
   }

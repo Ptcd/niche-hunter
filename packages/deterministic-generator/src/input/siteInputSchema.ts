@@ -6,7 +6,7 @@ import { z } from 'zod';
 
 export const SiteInputSchema = z.object({
   business_name: z.string().min(1),
-  cta_phone: z.string().regex(/^[\d\s\(\)\-]+$/),
+  cta_phone: z.string().regex(/^[\d\s\(\)\-\+]+$/),
   primary_service: z.string().min(1),
   supporting_services: z.array(z.string()).min(0),
   target_city: z.string().min(1),
