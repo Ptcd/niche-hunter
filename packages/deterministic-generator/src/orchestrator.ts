@@ -70,8 +70,18 @@ async function generateAndValidatePage(
 
   // Retry logic: if hard failure and first attempt, retry once
   if (!validation.pass && validation.hard_failures.length > 0 && attempt < 2) {
-    console.log(`[Orchestrator] Page ${payload.slug} failed validation, retrying...`);
+    console.log(`[Orchestrator] Page ${payload.slug} failed validation (attempt ${attempt}), retrying...`);
+    console.log(`[Orchestrator] Validation errors:`, validation.hard_failures.map(f => f.message || f).join('; '));
+    if (validation.warnings.length > 0) {
+      console.log(`[Orchestrator] Validation warnings:`, validation.warnings.map(w => w.message || w).join('; '));
+    }
     return generateAndValidatePage(payload, blueprint, config, attempt + 1);
+  }
+  
+  // Log final validation status
+  if (!validation.pass) {
+    console.warn(`[Orchestrator] Page ${payload.slug} failed validation after ${attempt} attempt(s):`, 
+      validation.hard_failures.map(f => f.message || f).join('; '));
   }
 
   return {
