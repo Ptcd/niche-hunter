@@ -1,8 +1,7 @@
 {
   "version": 2,
-  "buildCommand": "cd apps/web && bash build.sh",
-  "devCommand": "cd apps/web && npm run dev",
-  "installCommand": "npm install",
+  "buildCommand": "pnpm run build",
+  "installCommand": "pnpm install --frozen-lockfile",
   "framework": "nextjs",
   "outputDirectory": "apps/web/.next"
 }

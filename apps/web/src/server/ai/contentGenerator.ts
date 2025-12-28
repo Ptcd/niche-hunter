@@ -1868,7 +1868,7 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
   }
 
   // Generate sections based on ContentSkeleton
-  const sections: Section[] = [];
+  let sections: Section[] = [];
   
   // Track keyword usage and word count across all sections
   const totalWordBudget = WORD_LIMITS[page.pageType].max;
