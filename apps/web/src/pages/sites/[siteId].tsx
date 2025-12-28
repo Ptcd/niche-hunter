@@ -1497,6 +1497,7 @@ export default function SiteFactoryDetailPage() {
   const [loading, setLoading] = useState(true);
   const [building, setBuilding] = useState(false);
   const [buildingV2, setBuildingV2] = useState(false);
+  const [buildProgress, setBuildProgress] = useState<{ built: number; total: number; remaining: number } | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [showDomainModal, setShowDomainModal] = useState(false);
   const [showManualPhoneModal, setShowManualPhoneModal] = useState(false);
@@ -1556,24 +1557,32 @@ export default function SiteFactoryDetailPage() {
   };
 
   const handleBuildDeterministic = async () => {
-    if (!confirm('Build site using deterministic generator (v2)? This uses strict SEO rules and validation.')) {
-      return;
-    }
-
     setBuildingV2(true);
     try {
       const res = await fetch(`/api/v2/sites/${siteId}/build-deterministic`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ publishMode: 'skip' }),
+        body: JSON.stringify({ publishMode: 'skip', batch: 'auto' }),
       });
 
       if (res.ok) {
         const result = await res.json();
-        const manifest = result.manifest;
-        const validationStatus = manifest.validation_pass ? 'PASSED' : 'FAILED';
-        alert(`Site generation complete!\n\nValidation: ${validationStatus}\nPages generated: ${manifest.pages_generated.length}\nOutput: ${result.outputDirectory}`);
-        fetchSite();
+        
+        if (result.status === 'complete') {
+          alert(`✅ All pages built!\n\nTotal pages: ${result.totalPages}\nAll pages have been generated.`);
+          setBuildProgress(null);
+          fetchSite();
+        } else {
+          // Partial build - show progress
+          setBuildProgress({
+            built: result.builtPages,
+            total: result.totalPages,
+            remaining: result.remainingPages,
+          });
+          
+          const batchInfo = result.batch ? `\nBatch: ${result.batch.join(', ')}` : '';
+          alert(`✅ Built ${result.batch.length} pages in this batch!\n\nProgress: ${result.builtPages}/${result.totalPages} pages\nRemaining: ${result.remainingPages}${batchInfo}\n\nClick "Build Site (v2)" again to build the next batch.`);
+        }
       } else {
         const error = await res.json();
         alert(error.error || 'Failed to build site with deterministic generator');
@@ -1733,8 +1742,24 @@ export default function SiteFactoryDetailPage() {
               fontWeight: '600'
             }}
           >
-            {buildingV2 ? 'Building (v2)...' : 'Build Site (v2 - Deterministic)'}
+            {buildingV2 
+              ? 'Building (v2)...' 
+              : buildProgress 
+                ? `Build Next Batch (${buildProgress.built}/${buildProgress.total})`
+                : 'Build Site (v2 - Deterministic)'}
           </button>
+          {buildProgress && (
+            <div style={{ 
+              marginTop: '0.5rem', 
+              fontSize: '0.875rem', 
+              color: '#666',
+              padding: '0.5rem',
+              backgroundColor: '#f5f5f5',
+              borderRadius: '4px'
+            }}>
+              Progress: {buildProgress.built} / {buildProgress.total} pages built ({buildProgress.remaining} remaining)
+            </div>
+          )}
           
           <button
             onClick={handleBuildDraft}

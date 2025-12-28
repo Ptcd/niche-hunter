@@ -88,7 +88,11 @@ async function generateAndValidatePage(
  */
 export async function generateSiteDeterministic(
   siteId: string,
-  config: RunConfig
+  config: RunConfig,
+  options?: {
+    pagesToBuild?: string[]; // If provided, only build these specific pages
+    skipExisting?: boolean; // Skip pages that already exist in output directory
+  }
 ): Promise<RunManifest> {
   console.log(`[Orchestrator] Starting deterministic generation for site ${siteId}`);
 
@@ -201,7 +205,40 @@ export async function generateSiteDeterministic(
   const pagesGenerated: string[] = [];
   const pageResults: Array<{ slug: string; html: string; finalHtml: string }> = [];
 
-  for (const payload of pagePayloads) {
+  // Filter pages to build based on options
+  let pagesToGenerate = pagePayloads;
+  
+  if (options?.pagesToBuild !== undefined) {
+    if (options.pagesToBuild.length === 0) {
+      // Empty array means setup only, don't build any pages
+      pagesToGenerate = [];
+      console.log(`[Orchestrator] Setup only mode - skipping page generation`);
+    } else {
+      // Only build specified pages
+      pagesToGenerate = pagePayloads.filter(p => options.pagesToBuild!.includes(p.slug));
+      console.log(`[Orchestrator] Building ${pagesToGenerate.length} of ${pagePayloads.length} pages (filtered)`);
+    }
+  } else if (options?.skipExisting) {
+    // Skip pages that already exist
+    const existingPages = new Set<string>();
+    try {
+      const finalPagesDir = join(config.output_directory, 'pages_final');
+      const files = await fs.readdir(finalPagesDir);
+      for (const file of files) {
+        if (file.endsWith('.html')) {
+          const slug = '/' + file.replace('.html', '');
+          existingPages.add(slug);
+        }
+      }
+    } catch (error) {
+      // Directory doesn't exist yet, that's fine
+    }
+    
+    pagesToGenerate = pagePayloads.filter(p => !existingPages.has(p.slug));
+    console.log(`[Orchestrator] Skipping ${existingPages.size} existing pages, building ${pagesToGenerate.length} new pages`);
+  }
+
+  for (const payload of pagesToGenerate) {
     console.log(`[Orchestrator] Generating page: ${payload.slug}`);
     
     const result = await generateAndValidatePage(payload, blueprint, config);
@@ -218,6 +255,33 @@ export async function generateSiteDeterministic(
       html: result.finalHtml,
       finalHtml: result.finalHtml,
     });
+  }
+  
+  // Load existing pages if doing incremental build
+  if (options?.skipExisting || options?.pagesToBuild) {
+    try {
+      const finalPagesDir = join(config.output_directory, 'pages_final');
+      const files = await fs.readdir(finalPagesDir);
+      for (const file of files) {
+        if (file.endsWith('.html')) {
+          const slug = '/' + file.replace('.html', '');
+          // Only add if not already in pageResults
+          if (!pageResults.find(p => p.slug === slug)) {
+            const html = await fs.readFile(join(finalPagesDir, file), 'utf-8');
+            pageResults.push({
+              slug,
+              html,
+              finalHtml: html,
+            });
+            if (!pagesGenerated.includes(slug)) {
+              pagesGenerated.push(slug);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      // Directory doesn't exist, that's fine
+    }
   }
 
   // Step 8: Validate all pages together
