@@ -1496,6 +1496,7 @@ export default function SiteFactoryDetailPage() {
   const [site, setSite] = useState<Site | null>(null);
   const [loading, setLoading] = useState(true);
   const [building, setBuilding] = useState(false);
+  const [buildingV2, setBuildingV2] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [showDomainModal, setShowDomainModal] = useState(false);
   const [showManualPhoneModal, setShowManualPhoneModal] = useState(false);
@@ -1551,6 +1552,37 @@ export default function SiteFactoryDetailPage() {
       alert('Failed to build draft pages');
     } finally {
       setBuilding(false);
+    }
+  };
+
+  const handleBuildDeterministic = async () => {
+    if (!confirm('Build site using deterministic generator (v2)? This uses strict SEO rules and validation.')) {
+      return;
+    }
+
+    setBuildingV2(true);
+    try {
+      const res = await fetch(`/api/v2/sites/${siteId}/build-deterministic`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ publishMode: 'skip' }),
+      });
+
+      if (res.ok) {
+        const result = await res.json();
+        const manifest = result.manifest;
+        const validationStatus = manifest.validation_pass ? 'PASSED' : 'FAILED';
+        alert(`Site generation complete!\n\nValidation: ${validationStatus}\nPages generated: ${manifest.pages_generated.length}\nOutput: ${result.outputDirectory}`);
+        fetchSite();
+      } else {
+        const error = await res.json();
+        alert(error.error || 'Failed to build site with deterministic generator');
+      }
+    } catch (error: any) {
+      console.error('Error building deterministic:', error);
+      alert(`Failed to build site: ${error.message || 'Unknown error'}`);
+    } finally {
+      setBuildingV2(false);
     }
   };
 
@@ -1686,21 +1718,38 @@ export default function SiteFactoryDetailPage() {
           </div>
         </div>
 
-        <div style={{ marginTop: '1.5rem', display: 'flex', gap: '1rem' }}>
+        <div style={{ marginTop: '1.5rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
           <button
-            onClick={handleBuildDraft}
-            disabled={building}
+            onClick={handleBuildDeterministic}
+            disabled={buildingV2 || building}
             style={{
               padding: '0.75rem 1.5rem',
-              backgroundColor: building ? '#ccc' : '#0070f3',
+              backgroundColor: (buildingV2 || building) ? '#ccc' : '#9c27b0',
               color: 'white',
               border: 'none',
               borderRadius: '4px',
-              cursor: building ? 'not-allowed' : 'pointer',
+              cursor: (buildingV2 || building) ? 'not-allowed' : 'pointer',
+              fontSize: '1rem',
+              fontWeight: '600'
+            }}
+          >
+            {buildingV2 ? 'Building (v2)...' : 'Build Site (v2 - Deterministic)'}
+          </button>
+          
+          <button
+            onClick={handleBuildDraft}
+            disabled={building || buildingV2}
+            style={{
+              padding: '0.75rem 1.5rem',
+              backgroundColor: (building || buildingV2) ? '#ccc' : '#0070f3',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: (building || buildingV2) ? 'not-allowed' : 'pointer',
               fontSize: '1rem'
             }}
           >
-            {building ? 'Building...' : 'Build Draft Pages'}
+            {building ? 'Building...' : 'Build Draft Pages (Legacy)'}
           </button>
           
           <button

@@ -67,11 +67,24 @@ async function buildSemanticKeywordsMap(
  * Build site_input.json from a Site record
  */
 export async function buildSiteInputFromDb(siteId: string): Promise<SiteInput> {
-  // First fetch the site with niche
+  // First fetch the site with niche and batch
   const site = await prisma.site.findUnique({
     where: { id: siteId },
     include: {
       niche: true,
+      batch: {
+        include: {
+          keywords: {
+            where: {
+              isSkipped: false,
+            },
+            take: 50, // Sample for semantic keywords
+            include: {
+              nicheKeyword: true,
+            },
+          },
+        },
+      },
     },
   });
 

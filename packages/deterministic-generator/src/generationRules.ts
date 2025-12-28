@@ -306,3 +306,28 @@ export function getLandmarkRule(pageType: PageType): LandmarkRule | null {
   return LANDMARK_RULES[pageType];
 }
 
+export interface BlogRule {
+  post_count_min: number;
+  post_count_max: number;
+  index_links_to_all_posts: boolean;
+  post_must_link_to_service: boolean;
+  post_must_link_to_contact: boolean;
+  post_may_link_to_related: boolean;
+}
+
+export const BLOG_RULES: BlogRule = {
+  post_count_min: 3,
+  post_count_max: 20,
+  index_links_to_all_posts: true,
+  post_must_link_to_service: true,
+  post_must_link_to_contact: true,
+  post_may_link_to_related: true,
+};
+
+/**
+ * Get blog rule
+ */
+export function getBlogRule(): BlogRule {
+  return BLOG_RULES;
+}
+

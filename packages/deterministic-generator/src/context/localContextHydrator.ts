@@ -12,6 +12,29 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+// In-memory cache for local context (can be replaced with DB cache)
+interface CachedContext {
+  context: LocalContext;
+  expiresAt: number;
+}
+
+const contextCache = new Map<string, CachedContext>();
+const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+/**
+ * Get cache key for city/state
+ */
+function getCacheKey(city: string, state: string): string {
+  return `${city.toLowerCase()}-${state.toLowerCase()}`;
+}
+
+/**
+ * Check if cached context is still valid
+ */
+function isCacheValid(cached: CachedContext): boolean {
+  return Date.now() < cached.expiresAt;
+}
+
 /**
  * Generate local context using LLM (cached per city/state)
  */
@@ -20,14 +43,27 @@ export async function generateLocalContext(
   state: string,
   useDbForCities: boolean = true
 ): Promise<LocalContext> {
+  const cacheKey = getCacheKey(targetCity, state);
+  
+  // Check cache first
+  const cached = contextCache.get(cacheKey);
+  if (cached && isCacheValid(cached)) {
+    console.log(`[LocalContext] Using cached context for ${targetCity}, ${state}`);
+    return cached.context;
+  }
+
   // Try to get nearby cities from database first (if available)
   let nearbyCities: string[] = [];
   
   if (useDbForCities) {
     try {
-      // This requires a cityId - we'd need to look it up
-      // For now, we'll use LLM for both
-      // TODO: Integrate with geo-utils when cityId is available
+      // TODO: Integrate with DB cache table when available
+      // const dbCache = await prisma.localContextCache.findUnique({
+      //   where: { cityState: cacheKey }
+      // });
+      // if (dbCache && !isExpired(dbCache)) {
+      //   return dbCache.data as LocalContext;
+      // }
     } catch (error) {
       // Fall back to LLM
     }
@@ -41,10 +77,25 @@ export async function generateLocalContext(
   // Always generate landmarks via LLM (they're city-specific)
   const landmarks = await generateLandmarksViaLLM(targetCity, state);
   
-  return {
+  const context: LocalContext = {
     nearby_cities: nearbyCities,
     landmarks,
   };
+
+  // Cache the result
+  contextCache.set(cacheKey, {
+    context,
+    expiresAt: Date.now() + CACHE_TTL_MS,
+  });
+
+  // TODO: Save to DB cache when available
+  // await prisma.localContextCache.upsert({
+  //   where: { cityState: cacheKey },
+  //   create: { cityState: cacheKey, data: context, expiresAt: new Date(Date.now() + CACHE_TTL_MS) },
+  //   update: { data: context, expiresAt: new Date(Date.now() + CACHE_TTL_MS) },
+  // });
+
+  return context;
 }
 
 /**

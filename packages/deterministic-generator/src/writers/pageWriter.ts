@@ -125,6 +125,22 @@ OUTPUT:
 6. Reviews (if required)
 7. Call to Action (include phone: ${cta_phone})
 `;
+  } else if (page_type === 'blog_index') {
+    prompt += `REQUIRED STRUCTURE:
+1. H1 — Blog
+2. Introduction paragraph
+3. List of all blog posts (each as a link using [[INTERNAL:/blog/post-slug]])
+4. Brief description of blog purpose
+`;
+  } else if (page_type === 'blog_post') {
+    prompt += `REQUIRED STRUCTURE:
+1. H1 — Post title (use primary keyword)
+2. Introduction
+3. Main content (3-5 paragraphs)
+4. Conclusion
+5. Call to Action (include phone: ${cta_phone})
+6. Must include links to service page and contact page
+`;
   }
 
   return prompt;
