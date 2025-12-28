@@ -5,12 +5,109 @@
  */
 
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { prisma } from '@niche-hunter/db';
+import { prisma, PageType, PageStatus } from '@niche-hunter/db';
 import { inngest } from '@/lib/inngest/client';
 import { generateSiteDeterministic } from '@niche-hunter/deterministic-generator';
 import { promises as fs } from 'fs';
 import { join } from 'path';
 import os from 'os';
+
+/**
+ * Map v2 page type to database PageType enum
+ */
+function mapPageType(v2Type: string): PageType {
+  switch (v2Type) {
+    case 'home': return PageType.HOME;
+    case 'service': return PageType.CORE_SERVICE;
+    case 'city': return PageType.CITY;
+    case 'about': return PageType.ABOUT;
+    case 'contact': return PageType.CONTACT;
+    case 'terms': return PageType.LEGAL;
+    case 'blog_index': return PageType.SUPPORT;
+    case 'blog_post': return PageType.SUPPORT;
+    default: return PageType.SUPPORT;
+  }
+}
+
+/**
+ * Save generated pages to the database
+ */
+async function savePagesToDB(
+  siteId: string, 
+  outputDirectory: string, 
+  blueprint: any
+): Promise<number> {
+  let savedCount = 0;
+  
+  try {
+    const finalPagesDir = join(outputDirectory, 'pages_final');
+    const files = await fs.readdir(finalPagesDir);
+    
+    for (const file of files) {
+      if (!file.endsWith('.html')) continue;
+      
+      // Get slug from filename (e.g., "hvac-wesley-chapel-fl.html" -> "/hvac-wesley-chapel-fl")
+      const fileBase = file.replace('.html', '');
+      let slug = fileBase === 'index' ? '/' : '/' + fileBase;
+      
+      // Find page info from blueprint
+      const blueprintPage = blueprint.pages.find((p: any) => p.slug === slug);
+      if (!blueprintPage) {
+        console.warn(`[SaveToDB] Page ${slug} not found in blueprint, skipping`);
+        continue;
+      }
+      
+      // Read HTML content
+      const htmlContent = await fs.readFile(join(finalPagesDir, file), 'utf-8');
+      
+      // Extract H1 from HTML (simple regex)
+      const h1Match = htmlContent.match(/<h1[^>]*>([^<]+)<\/h1>/i);
+      const h1 = h1Match ? h1Match[1].trim() : blueprintPage.primary_keyword || slug;
+      
+      // Map page type
+      const pageType = mapPageType(blueprintPage.page_type);
+      
+      // Upsert page record
+      await prisma.sitePage.upsert({
+        where: {
+          siteId_slug: {
+            siteId,
+            slug,
+          },
+        },
+        update: {
+          htmlDraft: htmlContent,
+          status: PageStatus.DRAFT,
+          contentStatus: 'draft_generated',
+          latestGenerationAt: new Date(),
+          h1,
+          focusKeyword: blueprintPage.primary_keyword || slug,
+        },
+        create: {
+          siteId,
+          slug,
+          pageType,
+          titleTag: h1,
+          h1,
+          focusKeyword: blueprintPage.primary_keyword || slug,
+          supportingKeywords: blueprintPage.semantic_keywords || [],
+          internalLinks: blueprintPage.can_link_to || [],
+          htmlDraft: htmlContent,
+          status: PageStatus.DRAFT,
+          contentStatus: 'draft_generated',
+          latestGenerationAt: new Date(),
+        },
+      });
+      
+      savedCount++;
+      console.log(`[SaveToDB] Saved page: ${slug}`);
+    }
+  } catch (error: any) {
+    console.error('[SaveToDB] Error saving pages:', error.message);
+  }
+  
+  return savedCount;
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -135,11 +232,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (pagesToBuild.length === 0) {
+      // All pages already built, but ensure they're in the database
+      console.log(`[API] All pages built, syncing to database...`);
+      const savedCount = await savePagesToDB(siteId, outputDirectory, blueprint);
+      
       return res.status(200).json({
         status: 'complete',
         message: 'All pages have been built',
         totalPages: allPageSlugs.length,
         builtPages: allPageSlugs.length,
+        savedToDb: savedCount,
       });
     }
 
@@ -156,6 +258,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       pagesToBuild,
       skipExisting: true,
     });
+
+    // Save generated pages to the database
+    console.log(`[API] Saving pages to database...`);
+    const savedCount = await savePagesToDB(siteId, outputDirectory, blueprint);
+    console.log(`[API] Saved ${savedCount} pages to database`);
 
     // Count total built pages
     let totalBuilt = 0;
@@ -174,6 +281,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       totalPages: allPageSlugs.length,
       builtPages: totalBuilt,
       remainingPages: allPageSlugs.length - totalBuilt,
+      savedToDb: savedCount,
       manifest,
     });
   } catch (error: any) {
