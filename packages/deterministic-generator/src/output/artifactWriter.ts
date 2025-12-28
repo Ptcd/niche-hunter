@@ -152,17 +152,4 @@ export async function writeBlogPlan(
   );
 }
 
-/**
- * Write validation report
- */
-export async function writeValidationReport(
-  report: unknown,
-  outputPath: string
-): Promise<void> {
-  await fs.writeFile(
-    outputPath,
-    JSON.stringify(report, null, 2),
-    'utf-8'
-  );
-}
 

@@ -6,7 +6,7 @@
 
 export * from './types';
 export * from './generationRules';
-export * from './input/siteInputSchema';
+export { SiteInputSchema, validateSiteInput } from './input/siteInputSchema';
 export * from './input/siteInputBuilder';
 export * from './output/artifactWriter';
 export * from './output/runManifest';

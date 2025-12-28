@@ -7,7 +7,19 @@
 import { promises as fs } from 'fs';
 import { join } from 'path';
 import { Blueprint } from '../types';
-import type { PageSpec } from '../../../apps/web/src/lib/wpFactoryTypes';
+
+// Local PageSpec type (matching WordPress publish pipeline)
+export interface PageSpec {
+  type: string;
+  slug: string;
+  title: string;
+  content: string;
+  seoTitle: string;
+  seoDescription: string;
+  focusKeyword: string;
+  externalId?: string;
+  status?: 'draft' | 'publish';
+}
 
 /**
  * Extract title from HTML (first H1 or fallback)
@@ -142,15 +154,19 @@ export async function loadPagesFromArtifacts(
  * 
  * This is a thin adapter that loads pages_final/ and calls the existing publish pipeline
  */
+/**
+ * Publish pages from artifacts to WordPress
+ * 
+ * This function requires WordPress publish functions to be passed in
+ * to avoid circular dependencies with apps/web
+ */
 export async function publishFromArtifacts(
   siteId: string,
   outputDirectory: string,
   blueprint: Blueprint,
+  publishFn: (pages: PageSpec[], wpApiBase: string, wpUser: string, wpPassword: string) => Promise<{ results: Array<{ externalId?: string; slug?: string; wpPageId?: number; error?: string }> }>,
   publishStatus: 'draft' | 'publish' = 'draft'
 ): Promise<Array<{ pageId: string; success: boolean; error?: string; wpPageId?: number }>> {
-  // Import the publish pipeline (dynamic import to avoid circular deps)
-  const { publishSitePages } = await import('../../../apps/web/src/server/wp/publishPipeline');
-  
   // Load site input for business name
   const siteInputPath = join(outputDirectory, 'site_input.json');
   let businessName = blueprint.site_meta.primary_service;
@@ -170,7 +186,7 @@ export async function publishFromArtifacts(
     throw new Error('No pages found in pages_final/ directory');
   }
   
-  // Get site to build BrandSpec
+  // Get site from database
   const { prisma } = await import('@niche-hunter/db');
   const site = await prisma.site.findUnique({
     where: { id: siteId },
@@ -183,9 +199,6 @@ export async function publishFromArtifacts(
     throw new Error(`Site ${siteId} not found`);
   }
   
-  // Use WordPress client directly
-  const { publishPages } = await import('../../../apps/web/src/lib/wpFactoryClient');
-  
   if (!site.wpApiBase || !site.wpUser || !site.wpAppPassword) {
     throw new Error('Site missing WordPress configuration (wpApiBase, wpUser, wpAppPassword)');
   }
@@ -193,22 +206,22 @@ export async function publishFromArtifacts(
   // Publish pages with status and externalId
   const pageSpecsWithStatus = pageSpecs.map(spec => ({
     ...spec,
-    externalId: spec.slug || 'home', // Use slug as externalId
+    externalId: spec.slug || 'home',
     status: publishStatus,
   }));
   
-  const results = await publishPages(
-    pageSpecsWithStatus as any, // Type assertion needed due to externalId requirement
+  const results = await publishFn(
+    pageSpecsWithStatus,
     site.wpApiBase,
     site.wpUser,
     site.wpAppPassword
   );
   
-  return results.results.map((r: any) => ({
+  return results.results.map((r) => ({
     pageId: r.externalId || r.slug || 'unknown',
     success: !!r.wpPageId,
     error: r.error,
-    wpPageId: r.wpPageId ? (typeof r.wpPageId === 'number' ? r.wpPageId : parseInt(r.wpPageId)) : undefined,
+    wpPageId: r.wpPageId ? (typeof r.wpPageId === 'number' ? r.wpPageId : parseInt(String(r.wpPageId))) : undefined,
   }));
 }
 
