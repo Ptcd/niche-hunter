@@ -13,6 +13,10 @@ export const SiteInputSchema = z.object({
   state: z.string().length(2).toUpperCase(),
   business_type: z.enum(['lead_gen', 'local_service']),
   semantic_keywords_map: z.record(z.string(), z.array(z.string())),
+  top_keywords: z.array(z.object({
+    keyword: z.string(),
+    volume: z.number(),
+  })).optional(),
   blog: z.object({
     enabled: z.boolean(),
     num_posts: z.number().int().min(0).max(20),

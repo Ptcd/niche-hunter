@@ -34,11 +34,11 @@ async function buildSemanticKeywordsMap(
 
   // Build map for primary service
   const primaryKeywords = nicheKeywords
-    .filter(nk => {
+    .filter((nk: any) => {
       const keywordLower = nk.keyword.toLowerCase();
       return primaryService.toLowerCase().split(' ').some(word => keywordLower.includes(word));
     })
-    .map(nk => nk.keyword)
+    .map((nk: any) => nk.keyword)
     .slice(0, 10); // Limit to top 10
 
   if (primaryKeywords.length > 0) {
@@ -48,11 +48,11 @@ async function buildSemanticKeywordsMap(
   // Build map for supporting services
   for (const service of supportingServices) {
     const serviceKeywords = nicheKeywords
-      .filter(nk => {
+      .filter((nk: any) => {
         const keywordLower = nk.keyword.toLowerCase();
         return service.toLowerCase().split(' ').some(word => keywordLower.includes(word));
       })
-      .map(nk => nk.keyword)
+      .map((nk: any) => nk.keyword)
       .slice(0, 10);
 
     if (serviceKeywords.length > 0) {
@@ -96,22 +96,82 @@ export async function buildSiteInputFromDb(siteId: string): Promise<SiteInput> {
     throw new Error(`Site ${siteId} has no niche`);
   }
 
-  // Extract primary service from niche name or first keyword
-  const primaryService = site.niche.name.toLowerCase();
-  
-  // Extract supporting services from niche keywords
-  const nicheKeywords = await prisma.nicheKeyword.findMany({
+  // Find the CityV5000 record for this site's city/state
+  const cityRecord = await prisma.cityV5000.findUnique({
     where: {
-      nicheId: site.nicheId,
-      isActive: true,
+      city_state_countryCode: {
+        city: site.city,
+        state: site.state,
+        countryCode: 'US',
+      },
     },
-    take: 10,
   });
 
-  const supportingServices: string[] = [];
-  // Simple heuristic: if niche is "hvac", supporting might be "ac repair", "heating repair", etc.
-  // For now, we'll derive from keywords or leave empty
-  // This can be enhanced later with better service extraction
+  // Fetch batch keywords sorted by search volume (highest first)
+  // Use the site's batch keywords filtered by city and ordered by volume
+  let topKeywords: Array<{ keyword: string; volume: number }> = [];
+  let primaryService = site.niche.name.toLowerCase(); // Fallback to niche name
+
+  if (site.batchId && cityRecord) {
+    const batchKeywords = await prisma.keywordV5000.findMany({
+      where: {
+        batchId: site.batchId,
+        cityId: cityRecord.id,
+        isSkipped: false,
+      },
+      include: {
+        nicheKeyword: true,
+        metrics: true,
+      },
+    });
+
+    // Extract keywords with volumes and sort by volume (descending)
+    topKeywords = batchKeywords
+      .filter((k: any) => k.nicheKeyword && k.metrics?.searchVolume)
+      .map((k: any) => ({
+        keyword: k.nicheKeyword.keyword,
+        volume: k.metrics!.searchVolume!,
+      }))
+      .sort((a: any, b: any) => b.volume - a.volume)
+      .slice(0, 20);
+
+    // Use highest-volume keyword as primary service (not niche name!)
+    if (topKeywords.length > 0) {
+      primaryService = topKeywords[0].keyword.toLowerCase();
+    }
+  }
+
+  // If no batch keywords, fall back to niche keywords sorted by national volume
+  if (topKeywords.length === 0) {
+    const nicheKeywords = await prisma.nicheKeyword.findMany({
+      where: {
+        nicheId: site.nicheId,
+        isActive: true,
+        nationalVolume: { not: null },
+      },
+      orderBy: {
+        nationalVolume: 'desc',
+      },
+      take: 20,
+    });
+
+    topKeywords = nicheKeywords
+      .filter((nk: any) => nk.nationalVolume)
+      .map((nk: any) => ({
+        keyword: nk.keyword,
+        volume: nk.nationalVolume!,
+      }));
+
+    if (topKeywords.length > 0) {
+      primaryService = topKeywords[0].keyword.toLowerCase();
+    }
+  }
+
+  // Extract supporting services from next best keywords
+  const supportingServices: string[] = topKeywords
+    .slice(1, 6)
+    .map(k => k.keyword.toLowerCase())
+    .filter((keyword, index, self) => self.indexOf(keyword) === index); // Deduplicate
 
   // Build semantic keywords map
   const semanticKeywordsMap = await buildSemanticKeywordsMap(
@@ -132,6 +192,7 @@ export async function buildSiteInputFromDb(siteId: string): Promise<SiteInput> {
     state,
     business_type: 'lead_gen',
     semantic_keywords_map: semanticKeywordsMap,
+    top_keywords: topKeywords.length > 0 ? topKeywords : undefined,
     blog: {
       enabled: false, // Default to disabled, can be enabled later
       num_posts: 6,

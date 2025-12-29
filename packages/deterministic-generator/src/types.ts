@@ -11,6 +11,10 @@ export interface SiteInput {
   state: string;
   business_type: 'lead_gen' | 'local_service';
   semantic_keywords_map: Record<string, string[]>;
+  top_keywords?: Array<{
+    keyword: string;
+    volume: number;
+  }>;
   blog?: {
     enabled: boolean;
     num_posts: number;

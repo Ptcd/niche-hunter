@@ -41,12 +41,17 @@ export async function generateBlueprint(
   const pages: BlueprintPage[] = [];
   const allSlugs = new Set<string>();
   
+  // Get top keyword for home page (use highest volume keyword + city)
+  const topKeyword = siteInput.top_keywords && siteInput.top_keywords.length > 0
+    ? siteInput.top_keywords[0].keyword
+    : siteInput.primary_service;
+  
   // Home page
   const homePage: BlueprintPage = {
     slug: '/',
     page_type: 'home',
     can_link_to: [],
-    primary_keyword: `${siteInput.primary_service} ${siteInput.target_city} ${siteInput.state}`,
+    primary_keyword: `${topKeyword} ${siteInput.target_city} ${siteInput.state}`,
     semantic_keywords: siteInput.semantic_keywords_map[siteInput.primary_service] || [],
   };
   pages.push(homePage);
@@ -102,7 +107,7 @@ export async function generateBlueprint(
       can_link_to: ['/', '/contact', primaryServiceSlug],
       city,
       service: siteInput.primary_service,
-      primary_keyword: `${siteInput.primary_service} ${city} ${siteInput.state}`,
+      primary_keyword: `${topKeyword} ${city} ${siteInput.state}`,
       semantic_keywords: siteInput.semantic_keywords_map[siteInput.primary_service] || [],
     };
     
@@ -116,6 +121,7 @@ export async function generateBlueprint(
     slug: '/about',
     page_type: 'about',
     can_link_to: ['/', '/contact'],
+    primary_keyword: `About ${siteInput.business_name}`,
   };
   pages.push(aboutPage);
   allSlugs.add('/about');
@@ -125,6 +131,7 @@ export async function generateBlueprint(
     slug: '/contact',
     page_type: 'contact',
     can_link_to: ['/'],
+    primary_keyword: `Contact ${siteInput.business_name}`,
   };
   pages.push(contactPage);
   allSlugs.add('/contact');
@@ -134,6 +141,7 @@ export async function generateBlueprint(
     slug: '/terms',
     page_type: 'terms',
     can_link_to: ['/', '/contact'],
+    primary_keyword: `Terms of Service`,
   };
   pages.push(termsPage);
   allSlugs.add('/terms');
