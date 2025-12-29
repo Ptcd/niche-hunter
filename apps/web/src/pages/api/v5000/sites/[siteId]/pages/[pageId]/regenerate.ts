@@ -66,8 +66,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         aiDraftJson: generated.sections as any,
         targetWordCount: generated.wordCount,
         latestGenerationAt: new Date(),
-        lastPromptUsed: generated.promptUsed || customPrompt || null,  // ADD THIS
-        notesForGpt: notesForGpt || page.notesForGpt,  // ADD THIS - update notes if provided
+        // lastPromptUsed: generated.promptUsed || customPrompt || null,  // TODO: Uncomment after db migration
+        notesForGpt: notesForGpt || page.notesForGpt,
         // If status was NEEDS_REWRITE, change back to DRAFT
         status: page.status === PageStatus.NEEDS_REWRITE 
           ? PageStatus.DRAFT 
