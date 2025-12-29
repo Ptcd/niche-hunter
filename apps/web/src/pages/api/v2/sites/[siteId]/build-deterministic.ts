@@ -123,7 +123,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const { siteId } = req.query;
-  const { publishMode = 'skip', model = 'gpt-4o-mini', temperature = 0.7, batch = 'auto' } = req.body;
+  const { publishMode = 'skip', model = 'gpt-4o-mini', temperature = 0.7, batch = 'auto', clearOldPages = false } = req.body;
 
   if (typeof siteId !== 'string') {
     return res.status(400).json({ error: 'Invalid site ID' });
@@ -174,26 +174,36 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       allPageSlugs = blueprint.pages.map((p: any) => p.slug);
     }
 
+    // Optionally delete old legacy pages that aren't in the v2 blueprint
+    if (clearOldPages) {
+      console.log(`[API] Clearing old pages not in v2 blueprint...`);
+      const deleteResult = await prisma.sitePage.deleteMany({
+        where: {
+          siteId,
+          slug: { notIn: allPageSlugs },
+        },
+      });
+      console.log(`[API] Deleted ${deleteResult.count} old pages`);
+    }
+
     // Determine which pages to build in this batch
     let pagesToBuild: string[] = [];
     
     if (batch === 'auto') {
-      // Auto-detect next batch to build
-      const existingPages = new Set<string>();
-      try {
-        const finalPagesDir = join(outputDirectory, 'pages_final');
-        const files = await fs.readdir(finalPagesDir);
-        for (const file of files) {
-          if (file.endsWith('.html')) {
-            const slug = fileToSlug(file);
-            existingPages.add(slug);
-          }
-        }
-      } catch (error) {
-        // Directory doesn't exist yet
-      }
+      // Check DATABASE for existing v2 pages (not temp files - they don't persist!)
+      const existingDbPages = await prisma.sitePage.findMany({
+        where: {
+          siteId,
+          htmlDraft: { not: null },
+        },
+        select: { slug: true },
+      });
+      const existingPages = new Set(existingDbPages.map(p => p.slug.startsWith('/') ? p.slug : '/' + p.slug));
+      
+      console.log(`[API] Found ${existingPages.size} existing pages in database: ${Array.from(existingPages).join(', ')}`);
 
       const remainingPages = allPageSlugs.filter(slug => !existingPages.has(slug));
+      console.log(`[API] Remaining pages to build: ${remainingPages.join(', ')}`);
       
       // Batch 1: Core pages (home, about, contact, terms) - 4 pages
       const corePages = remainingPages.filter(slug => 
@@ -219,20 +229,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
       }
     } else if (batch === 'all') {
-      // Build all remaining pages
-      const existingPages = new Set<string>();
-      try {
-        const finalPagesDir = join(outputDirectory, 'pages_final');
-        const files = await fs.readdir(finalPagesDir);
-        for (const file of files) {
-          if (file.endsWith('.html')) {
-            const slug = fileToSlug(file);
-            existingPages.add(slug);
-          }
-        }
-      } catch (error) {
-        // Directory doesn't exist yet
-      }
+      // Build all remaining pages - check DATABASE
+      const existingDbPages = await prisma.sitePage.findMany({
+        where: {
+          siteId,
+          htmlDraft: { not: null },
+        },
+        select: { slug: true },
+      });
+      const existingPages = new Set(existingDbPages.map(p => p.slug.startsWith('/') ? p.slug : '/' + p.slug));
       pagesToBuild = allPageSlugs.filter(slug => !existingPages.has(slug));
     } else if (Array.isArray(batch)) {
       // Specific pages provided
@@ -272,18 +277,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const savedCount = await savePagesToDB(siteId, outputDirectory, blueprint);
     console.log(`[API] Saved ${savedCount} pages to database`);
 
-    // Count total built pages
-    let totalBuilt = 0;
-    try {
-      const finalPagesDir = join(outputDirectory, 'pages_final');
-      const files = await fs.readdir(finalPagesDir);
-      totalBuilt = files.filter(f => f.endsWith('.html')).length;
-    } catch (error) {
-      totalBuilt = pagesToBuild.length;
-    }
+    // Count total built pages from DATABASE (not temp files)
+    const builtDbPages = await prisma.sitePage.findMany({
+      where: {
+        siteId,
+        htmlDraft: { not: null },
+        slug: { in: allPageSlugs },
+      },
+      select: { slug: true },
+    });
+    const totalBuilt = builtDbPages.length;
+
+    // Check if all v2 pages are built
+    const isComplete = totalBuilt >= allPageSlugs.length;
 
     return res.status(200).json({
-      status: 'partial',
+      status: isComplete ? 'complete' : 'partial',
       message: `Built ${pagesToBuild.length} pages in this batch`,
       batch: pagesToBuild,
       totalPages: allPageSlugs.length,

@@ -1559,10 +1559,11 @@ export default function SiteFactoryDetailPage() {
   const handleBuildDeterministic = async () => {
     setBuildingV2(true);
     try {
+      // Always clear old legacy pages that aren't in the v2 blueprint
       const res = await fetch(`/api/v2/sites/${siteId}/build-deterministic`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ publishMode: 'skip', batch: 'auto' }),
+        body: JSON.stringify({ publishMode: 'skip', batch: 'auto', clearOldPages: true }),
       });
 
       if (res.ok) {
