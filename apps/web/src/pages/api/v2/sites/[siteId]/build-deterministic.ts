@@ -177,13 +177,37 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Optionally delete old legacy pages that aren't in the v2 blueprint
     if (clearOldPages) {
       console.log(`[API] Clearing old pages not in v2 blueprint...`);
-      const deleteResult = await prisma.sitePage.deleteMany({
-        where: {
-          siteId,
-          slug: { notIn: allPageSlugs },
-        },
+      console.log(`[API] V2 blueprint slugs: ${allPageSlugs.join(', ')}`);
+      
+      // Normalize slugs to handle both formats (with/without leading slash)
+      const normalizedV2Slugs = new Set<string>();
+      for (const slug of allPageSlugs) {
+        normalizedV2Slugs.add(slug.startsWith('/') ? slug : '/' + slug);
+        normalizedV2Slugs.add(slug.startsWith('/') ? slug.slice(1) : slug);
+      }
+      
+      // Get all current pages and delete those not in v2 blueprint
+      const allCurrentPages = await prisma.sitePage.findMany({
+        where: { siteId },
+        select: { id: true, slug: true },
       });
-      console.log(`[API] Deleted ${deleteResult.count} old pages`);
+      
+      const pagesToDelete = allCurrentPages.filter(p => {
+        const withSlash = p.slug.startsWith('/') ? p.slug : '/' + p.slug;
+        const withoutSlash = p.slug.startsWith('/') ? p.slug.slice(1) : p.slug;
+        return !normalizedV2Slugs.has(withSlash) && !normalizedV2Slugs.has(withoutSlash);
+      });
+      
+      console.log(`[API] Pages to delete: ${pagesToDelete.map(p => p.slug).join(', ')}`);
+      
+      if (pagesToDelete.length > 0) {
+        const deleteResult = await prisma.sitePage.deleteMany({
+          where: {
+            id: { in: pagesToDelete.map(p => p.id) },
+          },
+        });
+        console.log(`[API] Deleted ${deleteResult.count} old pages`);
+      }
     }
 
     // Determine which pages to build in this batch
