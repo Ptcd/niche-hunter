@@ -152,12 +152,18 @@ OUTPUT:
   } else if (page_type === 'city') {
     prompt += `REQUIRED STRUCTURE:
 1. H1 — Primary keyword + business name
-2. Introduction
-3. Why This Service Matters in This City
-4. What to Expect
-5. Local Area Context (include exactly 1 landmark)
-6. Reviews (if required)
+2. Introduction (150+ words, include [[INTERNAL:/]] link to home page)
+3. Why This Service Matters in This City (200+ words)
+4. What to Expect (200+ words, include [[INTERNAL:/contact]] link)
+5. Local Area Context (150+ words, include exactly 1 landmark from the list provided)
+6. Customer Reviews (generate 2-3 reviews)
 7. Call to Action (include phone: ${formattedPhone})
+
+CRITICAL REQUIREMENTS:
+- MUST include exactly 2 [[INTERNAL:/slug]] placeholders - choose from: ${payload.can_link_to.join(', ')}
+- MUST include exactly 1 external link placeholder: ${payload.external_link_placeholders[0] || '[[EXTERNAL:energy.gov]]'}
+- Target word count: 900-1200 words total
+- Do NOT skip any section
 `;
   } else if (page_type === 'blog_index') {
     prompt += `REQUIRED STRUCTURE:
