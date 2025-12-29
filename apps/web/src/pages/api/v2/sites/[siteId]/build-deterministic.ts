@@ -215,16 +215,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     
     if (batch === 'auto') {
       // Check DATABASE for existing v2 pages (not temp files - they don't persist!)
+      // Only count pages that are in the v2 blueprint
       const existingDbPages = await prisma.sitePage.findMany({
         where: {
           siteId,
-          htmlDraft: { not: null },
+          slug: { in: allPageSlugs },  // Only count v2 blueprint pages
         },
-        select: { slug: true },
+        select: { slug: true, htmlDraft: true },
       });
-      const existingPages = new Set(existingDbPages.map(p => p.slug.startsWith('/') ? p.slug : '/' + p.slug));
+      // Count pages that have content generated
+      const builtPages = existingDbPages.filter(p => p.htmlDraft !== null);
+      const existingPages = new Set(builtPages.map(p => p.slug.startsWith('/') ? p.slug : '/' + p.slug));
       
-      console.log(`[API] Found ${existingPages.size} existing pages in database: ${Array.from(existingPages).join(', ')}`);
+      console.log(`[API] Found ${existingPages.size} built pages in database (out of ${existingDbPages.length} total v2 pages): ${Array.from(existingPages).join(', ')}`);
 
       const remainingPages = allPageSlugs.filter(slug => !existingPages.has(slug));
       console.log(`[API] Remaining pages to build: ${remainingPages.join(', ')}`);

@@ -1724,12 +1724,17 @@ export interface GeneratedPage {
   sections: Section[];
   html: string;
   wordCount: number;
+  promptUsed?: string;  // The prompt that was actually used
 }
 
 /**
  * Generate content for a single page
  */
-export async function generatePageContent(pageId: string, model: string = 'gpt-4o-mini'): Promise<GeneratedPage> {
+export async function generatePageContent(
+  pageId: string, 
+  model: string = 'gpt-4o-mini',
+  options?: { customPrompt?: string; notesForGpt?: string }
+): Promise<GeneratedPage> {
   const page = await prisma.sitePage.findUnique({
     where: { id: pageId },
     include: {
@@ -1761,6 +1766,45 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
 
   if (!page) {
     throw new Error(`Page ${pageId} not found`);
+  }
+
+  // If custom prompt is provided, use it directly to generate the entire page
+  if (options?.customPrompt) {
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const completion = await openai.chat.completions.create({
+      model: model,
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a professional content writer for local service businesses. Output clean HTML only, no markdown, no commentary.',
+        },
+        {
+          role: 'user',
+          content: options.customPrompt + (options.notesForGpt ? `\n\nAdditional instructions: ${options.notesForGpt}` : ''),
+        },
+      ],
+      temperature: 0.7,
+    });
+
+    const generatedHtml = completion.choices[0]?.message?.content || '';
+    const wordCount = generatedHtml.split(/\s+/).length;
+
+    // Update page with generated content
+    await prisma.sitePage.update({
+      where: { id: pageId },
+      data: {
+        titleTag: page.titleTag || page.h1 || page.focusKeyword,
+        seoDescription: page.seoDescription || '',
+      },
+    });
+
+    return {
+      pageId: page.id,
+      sections: [{ id: 'custom', type: 'content', heading: page.h1 || '', content: generatedHtml }],
+      html: generatedHtml,
+      wordCount,
+      promptUsed: options.customPrompt,
+    };
   }
 
   const site = page.site;
@@ -2386,6 +2430,7 @@ export async function generatePageContent(pageId: string, model: string = 'gpt-4
     sections,
     html,
     wordCount,
+    promptUsed: options?.customPrompt || undefined,  // Return custom prompt if used, otherwise undefined
   };
 }
 

@@ -39,10 +39,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Get model from request body, default to 'gpt-4o-mini'
-    const { model = 'gpt-4o-mini' } = req.body as { model?: string };
+    const { model = 'gpt-4o-mini', customPrompt, notesForGpt } = req.body as { 
+      model?: string;
+      customPrompt?: string;
+      notesForGpt?: string;
+    };
 
     // Generate new content (this also updates titleTag and seoDescription)
-    const generated = await generatePageContent(pageId, model);
+    const generated = await generatePageContent(pageId, model, { customPrompt, notesForGpt });
 
     // Reload page to get updated SEO meta
     const updatedPage = await prisma.sitePage.findUnique({
@@ -62,6 +66,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         aiDraftJson: generated.sections as any,
         targetWordCount: generated.wordCount,
         latestGenerationAt: new Date(),
+        lastPromptUsed: generated.promptUsed || customPrompt || null,  // ADD THIS
+        notesForGpt: notesForGpt || page.notesForGpt,  // ADD THIS - update notes if provided
         // If status was NEEDS_REWRITE, change back to DRAFT
         status: page.status === PageStatus.NEEDS_REWRITE 
           ? PageStatus.DRAFT 

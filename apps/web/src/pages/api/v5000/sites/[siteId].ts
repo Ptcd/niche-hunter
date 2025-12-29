@@ -66,6 +66,7 @@ async function handler(req: NextApiRequest & { auth: any }, res: NextApiResponse
             htmlDraft: true,
             htmlEdited: true,
             notesForGpt: true,
+            lastPromptUsed: true,  // ADD THIS LINE
             wpPageId: true,
             wpPermalink: true,
             wpEditUrl: true,

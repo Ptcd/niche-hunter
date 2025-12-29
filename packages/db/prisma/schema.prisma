@@ -448,6 +448,7 @@ model SitePage {
   htmlDraft          String?  @db.Text // GPT-generated HTML (latest draft)
   htmlEdited         String?  @db.Text // Human-edited HTML version
   notesForGpt        String?  @db.Text // Per-page instructions for GPT regeneration
+  lastPromptUsed     String?  @db.Text // The full prompt used for last generation
   humanNotes         String?  @db.Text // VA comments / things to fix
   keyword            String?  // Alias for focusKeyword (for compatibility)
   keywordId           String?  // FK to KeywordV5000 (local main keyword)

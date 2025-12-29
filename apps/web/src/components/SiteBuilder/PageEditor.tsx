@@ -20,6 +20,7 @@ interface Page {
   htmlDraft: string | null;
   htmlEdited: string | null;
   notesForGpt: string | null;
+  lastPromptUsed: string | null;  // ADD THIS
   status: string | null;
   wpPermalink: string | null;
   heroImageUrl?: string | null;
@@ -49,6 +50,9 @@ export default function PageEditor({ siteId, pageId, city, state, onPageUpdate }
   const [seoDescription, setSeoDescription] = useState('');
   const [htmlEdited, setHtmlEdited] = useState('');
   const [notesForGpt, setNotesForGpt] = useState('');
+  const [showPrompt, setShowPrompt] = useState(false);
+  const [customPrompt, setCustomPrompt] = useState('');
+  const [useCustomPrompt, setUseCustomPrompt] = useState(false);
   
   // Audit state
   const [auditing, setAuditing] = useState(false);
@@ -80,6 +84,7 @@ export default function PageEditor({ siteId, pageId, city, state, onPageUpdate }
           setSeoDescription(foundPage.seoDescription || '');
           setHtmlEdited(foundPage.htmlEdited || '');
           setNotesForGpt(foundPage.notesForGpt || '');
+          setCustomPrompt(foundPage.lastPromptUsed || '');  // Initialize with last prompt if available
           setUseCustomHtml(!!foundPage.htmlEdited);
         }
       }
@@ -139,7 +144,11 @@ export default function PageEditor({ siteId, pageId, city, state, onPageUpdate }
       const res = await fetch(`/api/v5000/sites/${siteId}/pages/${pageId}/regenerate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: selectedModel }),
+        body: JSON.stringify({ 
+          model: selectedModel,
+          customPrompt: useCustomPrompt ? customPrompt : undefined,
+          notesForGpt: notesForGpt || undefined,
+        }),
       });
 
       if (res.ok) {
@@ -346,6 +355,80 @@ export default function PageEditor({ siteId, pageId, city, state, onPageUpdate }
               <div style={{ fontSize: '0.875rem', color: '#666', fontStyle: 'italic' }}>
                 No hero image selected
               </div>
+            )}
+          </div>
+
+          {/* Prompt Viewer/Editor */}
+          <div style={{ marginBottom: '1rem', padding: '1rem', backgroundColor: '#f0f4f8', borderRadius: '4px', border: '1px solid #d0d7de' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+              <label style={{ fontWeight: 'bold' }}>Generation Prompt</label>
+              <button
+                onClick={() => setShowPrompt(!showPrompt)}
+                style={{
+                  padding: '0.25rem 0.75rem',
+                  backgroundColor: 'transparent',
+                  border: '1px solid #0070f3',
+                  borderRadius: '4px',
+                  color: '#0070f3',
+                  cursor: 'pointer',
+                  fontSize: '0.875rem',
+                }}
+              >
+                {showPrompt ? 'Hide Prompt' : 'View/Edit Prompt'}
+              </button>
+            </div>
+            
+            {showPrompt && (
+              <>
+                {page.lastPromptUsed && (
+                  <div style={{ marginBottom: '1rem' }}>
+                    <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', color: '#666' }}>
+                      Last Prompt Used:
+                    </label>
+                    <pre style={{
+                      backgroundColor: '#fff',
+                      padding: '0.75rem',
+                      borderRadius: '4px',
+                      border: '1px solid #ddd',
+                      fontSize: '0.75rem',
+                      maxHeight: '200px',
+                      overflow: 'auto',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                    }}>
+                      {page.lastPromptUsed}
+                    </pre>
+                  </div>
+                )}
+                
+                <div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                    <input
+                      type="checkbox"
+                      checked={useCustomPrompt}
+                      onChange={(e) => setUseCustomPrompt(e.target.checked)}
+                    />
+                    <span style={{ fontSize: '0.875rem' }}>Use custom prompt for next generation</span>
+                  </label>
+                  
+                  {useCustomPrompt && (
+                    <textarea
+                      value={customPrompt}
+                      onChange={(e) => setCustomPrompt(e.target.value)}
+                      rows={10}
+                      placeholder="Enter your custom prompt here. This will completely replace the default prompt."
+                      style={{
+                        width: '100%',
+                        padding: '0.5rem',
+                        border: '1px solid #ddd',
+                        borderRadius: '4px',
+                        fontFamily: 'monospace',
+                        fontSize: '0.75rem',
+                      }}
+                    />
+                  )}
+                </div>
+              </>
             )}
           </div>
 
