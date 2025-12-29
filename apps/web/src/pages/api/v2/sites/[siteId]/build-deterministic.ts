@@ -13,6 +13,14 @@ import { join } from 'path';
 import os from 'os';
 
 /**
+ * Parse filename to slug (handles index.html -> /)
+ */
+function fileToSlug(filename: string): string {
+  const fileBase = filename.replace('.html', '');
+  return fileBase === 'index' ? '/' : '/' + fileBase;
+}
+
+/**
  * Map v2 page type to database PageType enum
  */
 function mapPageType(v2Type: string): PageType {
@@ -177,7 +185,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const files = await fs.readdir(finalPagesDir);
         for (const file of files) {
           if (file.endsWith('.html')) {
-            const slug = '/' + file.replace('.html', '');
+            const slug = fileToSlug(file);
             existingPages.add(slug);
           }
         }
@@ -218,7 +226,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const files = await fs.readdir(finalPagesDir);
         for (const file of files) {
           if (file.endsWith('.html')) {
-            const slug = '/' + file.replace('.html', '');
+            const slug = fileToSlug(file);
             existingPages.add(slug);
           }
         }
