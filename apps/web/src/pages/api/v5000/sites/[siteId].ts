@@ -66,7 +66,7 @@ async function handler(req: NextApiRequest & { auth: any }, res: NextApiResponse
             htmlDraft: true,
             htmlEdited: true,
             notesForGpt: true,
-            // lastPromptUsed: true,  // TODO: Uncomment after running db migration
+            lastPromptUsed: true,
             wpPageId: true,
             wpPermalink: true,
             wpEditUrl: true,
