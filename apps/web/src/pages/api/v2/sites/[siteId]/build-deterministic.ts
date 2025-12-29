@@ -304,28 +304,37 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const savedCount = await savePagesToDB(siteId, outputDirectory, blueprint);
     console.log(`[API] Saved ${savedCount} pages to database`);
 
-    // Count total built pages from DATABASE (not temp files)
+    // Count total built pages from DATABASE - count ALL pages with htmlDraft (matching sidebar)
     const builtDbPages = await prisma.sitePage.findMany({
       where: {
         siteId,
         htmlDraft: { not: null },
-        slug: { in: allPageSlugs },
       },
       select: { slug: true },
     });
     const totalBuilt = builtDbPages.length;
+    
+    console.log(`[API] Total pages in DB with content: ${totalBuilt}`);
+    console.log(`[API] DB page slugs: ${builtDbPages.map(p => p.slug).join(', ')}`);
 
+    // Count how many blueprint pages are actually built
+    const builtBlueprintSlugs = builtDbPages.map(p => p.slug).filter(slug => 
+      allPageSlugs.includes(slug) || allPageSlugs.includes(slug.startsWith('/') ? slug : '/' + slug)
+    );
+    const blueprintPagesBuilt = builtBlueprintSlugs.length;
+    
     // Check if all v2 pages are built
-    const isComplete = totalBuilt >= allPageSlugs.length;
+    const isComplete = blueprintPagesBuilt >= allPageSlugs.length;
 
     return res.status(200).json({
       status: isComplete ? 'complete' : 'partial',
       message: `Built ${pagesToBuild.length} pages in this batch`,
       batch: pagesToBuild,
       totalPages: allPageSlugs.length,
-      builtPages: totalBuilt,
-      remainingPages: allPageSlugs.length - totalBuilt,
+      builtPages: blueprintPagesBuilt,
+      remainingPages: allPageSlugs.length - blueprintPagesBuilt,
       savedToDb: savedCount,
+      pagesInDb: totalBuilt,  // Actual pages in DB (for debugging)
       manifest,
     });
   } catch (error: any) {
